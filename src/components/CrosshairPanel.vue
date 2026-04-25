@@ -6,18 +6,10 @@ import { useUiStore } from '../stores/ui'
 const uiStore = useUiStore()
 const { crosshairOffsetX, crosshairOffsetY, crosshairWidth, displayScale, showCenterDot } =
   storeToRefs(uiStore)
-
-function handleReset() {
-  uiStore.resetDefaults()
-}
-
-function handleSave() {
-  uiStore.save()
-}
 </script>
 
 <template>
-  <n-card size="small" title="准星参数">
+  <n-card size="small" title="准星参数" :bordered="false" class="panel-card">
     <n-form label-placement="left" label-width="120">
       <n-form-item label="offsetX">
         <n-input-number v-model:value="crosshairOffsetX" :step="1" />
@@ -36,8 +28,14 @@ function handleSave() {
       </n-form-item>
     </n-form>
     <n-space justify="end">
-      <n-button secondary @click="handleReset">恢复默认值</n-button>
-      <n-button type="primary" @click="handleSave">保存配置</n-button>
+      <n-button secondary @click="uiStore.resetDefaults">恢复默认值</n-button>
+      <n-button type="primary" @click="uiStore.save">保存配置</n-button>
     </n-space>
   </n-card>
 </template>
+
+<style scoped>
+.panel-card {
+  background: transparent;
+}
+</style>

@@ -27,7 +27,16 @@ pub async fn connect_mqtt(
     });
   }
 
-  let runtime = spawn_mqtt_loop(app, host, port);
+  let runtime = spawn_mqtt_loop(
+    app,
+    host,
+    port,
+    state.decoder_input_tx.clone(),
+    state.video_config.clone(),
+    state.custom_block_stats.clone(),
+    state.custom_block_reassembler.clone(),
+    state.frame_hub.clone(),
+  );
   *runtime_slot = Some(runtime);
 
   Ok(CommandResult {

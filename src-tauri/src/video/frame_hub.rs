@@ -17,6 +17,8 @@ pub struct FrameSnapshot {
 pub struct DecoderStats {
   pub decoder_reset_count: u64,
   pub last_decode_cost_ms: f64,
+  pub current_decoder_name: String,
+  pub decoder_init_success: bool,
 }
 
 #[derive(Debug, Clone, Default)]
@@ -73,9 +75,17 @@ impl LatestFrameHub {
     })
   }
 
+  #[cfg_attr(not(feature = "real-decoder"), allow(dead_code))]
   pub async fn mark_decoder_reset(&self) {
     let mut stats = self.decoder_stats.write().await;
     stats.decoder_reset_count += 1;
+    stats.decoder_init_success = false;
+  }
+
+  pub async fn set_decoder_status(&self, current_decoder_name: String, decoder_init_success: bool) {
+    let mut stats = self.decoder_stats.write().await;
+    stats.current_decoder_name = current_decoder_name;
+    stats.decoder_init_success = decoder_init_success;
   }
 
   pub async fn decoder_stats(&self) -> DecoderStats {

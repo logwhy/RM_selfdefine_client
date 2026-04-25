@@ -1,0 +1,43 @@
+:root {
+  --rm-bg-0: #060a0f;
+  --rm-bg-1: #0a121c;
+  --rm-panel: rgba(10, 18, 28, 0.82);
+  --rm-panel-strong: rgba(8, 15, 24, 0.94);
+  --rm-cyan: #19f7ff;
+  --rm-blue: #2e7bff;
+  --rm-red: #ff3b3b;
+  --rm-orange: #ffb020;
+  --rm-green: #35ff9b;
+  --rm-text: #eaf7ff;
+  --rm-muted: #8ca6b8;
+  --rm-line: rgba(25, 247, 255, 0.38);
+  --rm-glow: 0 0 20px rgba(25, 247, 255, 0.18);
+}
+
+body {
+  background:
+    radial-gradient(circle at 20% 0%, rgba(25, 247, 255, 0.08), transparent 28%),
+    radial-gradient(circle at 85% 8%, rgba(255, 59, 59, 0.09), transparent 24%),
+    linear-gradient(180deg, var(--rm-bg-1), var(--rm-bg-0));
+}
+
+.rm-glass {
+  border: 1px solid var(--rm-line);
+  background:
+    linear-gradient(135deg, rgba(25, 247, 255, 0.08), transparent 38%),
+    var(--rm-panel);
+  box-shadow: var(--rm-glow), inset 0 0 18px rgba(46, 123, 255, 0.08);
+  backdrop-filter: blur(12px);
+}
+
+.rm-panel-title {
+  color: var(--rm-text);
+  font-size: 12px;
+  font-weight: 800;
+  letter-spacing: 0.12em;
+  text-transform: uppercase;
+}
+
+.rm-muted {
+  color: var(--rm-muted);
+}

@@ -1,4 +1,5 @@
 use crate::video::frame_hub::LatestFrameHub;
+use crate::video::source::CodecMode;
 use std::sync::Arc;
 use std::time::Instant;
 use tokio::sync::{mpsc, oneshot};
@@ -39,20 +40,22 @@ impl DecoderRuntime {
 
 pub fn spawn_decoder(
   frame_hub: Arc<LatestFrameHub>,
+  codec_mode: CodecMode,
 ) -> (DecoderRuntime, mpsc::Sender<Vec<u8>>) {
   #[cfg(feature = "real-decoder")]
   {
-    return spawn_real_decoder(frame_hub);
+    return spawn_real_decoder(frame_hub, codec_mode);
   }
   #[cfg(not(feature = "real-decoder"))]
   {
-    return spawn_stub_decoder(frame_hub);
+    return spawn_stub_decoder(frame_hub, codec_mode);
   }
 }
 
 #[cfg(feature = "real-decoder")]
 fn spawn_real_decoder(
   frame_hub: Arc<LatestFrameHub>,
+  codec_mode: CodecMode,
 ) -> (DecoderRuntime, mpsc::Sender<Vec<u8>>) {
   let (tx, mut rx) = mpsc::channel::<Vec<u8>>(8);
   let (stop_tx, mut stop_rx) = oneshot::channel::<()>();
@@ -65,7 +68,7 @@ fn spawn_real_decoder(
     let (packet_tx, packet_rx) = std_mpsc::channel::<Vec<u8>>();
 
     let decoder_worker = tokio::task::spawn_blocking(move || {
-      run_real_decoder_loop(packet_rx, stop_flag_for_decoder, frame_hub_for_decoder, rt_handle);
+      run_real_decoder_loop(packet_rx, stop_flag_for_decoder, frame_hub_for_decoder, rt_handle, codec_mode);
     });
 
     loop {
@@ -100,13 +103,19 @@ fn run_real_decoder_loop(
   stop_flag: Arc<AtomicBool>,
   frame_hub: Arc<LatestFrameHub>,
   rt_handle: tokio::runtime::Handle,
+  codec_mode: CodecMode,
 ) {
   let _ = ffmpeg::init();
 
-  let mut decoder = match create_hevc_decoder() {
-    Ok(v) => Some(v),
+  let decoder_name = codec_mode.decoder_name(true);
+  let mut decoder = match create_video_decoder(codec_mode) {
+    Ok(v) => {
+      rt_handle.block_on(frame_hub.set_decoder_status(decoder_name.clone(), true));
+      Some(v)
+    }
     Err(error) => {
-      log::error!("create HEVC decoder failed: {error}");
+      log::error!("create {codec_mode:?} decoder failed: {error}");
+      rt_handle.block_on(frame_hub.set_decoder_status(decoder_name.clone(), false));
       rt_handle.block_on(frame_hub.mark_decoder_reset());
       None
     }
@@ -122,10 +131,16 @@ fn run_real_decoder_loop(
     };
 
     if decoder.is_none() {
-      decoder = create_hevc_decoder().ok();
-      if decoder.is_none() {
-        rt_handle.block_on(frame_hub.mark_decoder_reset());
-        continue;
+      match create_video_decoder(codec_mode) {
+        Ok(value) => {
+          rt_handle.block_on(frame_hub.set_decoder_status(decoder_name.clone(), true));
+          decoder = Some(value);
+        }
+        Err(_) => {
+          rt_handle.block_on(frame_hub.set_decoder_status(decoder_name.clone(), false));
+          rt_handle.block_on(frame_hub.mark_decoder_reset());
+          continue;
+        }
       }
     }
 
@@ -218,11 +233,15 @@ fn run_real_decoder_loop(
 #[cfg(not(feature = "real-decoder"))]
 fn spawn_stub_decoder(
   frame_hub: Arc<LatestFrameHub>,
+  codec_mode: CodecMode,
 ) -> (DecoderRuntime, mpsc::Sender<Vec<u8>>) {
   let (tx, mut rx) = mpsc::channel::<Vec<u8>>(8);
   let (stop_tx, mut stop_rx) = oneshot::channel::<()>();
 
   let join_handle = tokio::spawn(async move {
+    frame_hub
+      .set_decoder_status(codec_mode.decoder_name(false), true)
+      .await;
     let mut tick: u8 = 0;
     loop {
       tokio::select! {
@@ -262,9 +281,12 @@ fn spawn_stub_decoder(
 }
 
 #[cfg(feature = "real-decoder")]
-fn create_hevc_decoder() -> Result<ffmpeg::decoder::Video, ffmpeg::Error> {
-  let codec = ffmpeg::codec::decoder::find(ffmpeg::codec::Id::HEVC)
-    .ok_or(ffmpeg::Error::DecoderNotFound)?;
+fn create_video_decoder(codec_mode: CodecMode) -> Result<ffmpeg::decoder::Video, ffmpeg::Error> {
+  let codec_id = match codec_mode {
+    CodecMode::Auto | CodecMode::Hevc => ffmpeg::codec::Id::HEVC,
+    CodecMode::H264 => ffmpeg::codec::Id::H264,
+  };
+  let codec = ffmpeg::codec::decoder::find(codec_id).ok_or(ffmpeg::Error::DecoderNotFound)?;
   let context = ffmpeg::codec::Context::new_with_codec(codec);
   context.decoder().video()
 }

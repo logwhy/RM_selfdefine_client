@@ -1,12 +1,15 @@
-use crate::video::reassembler::FrameReassembler;
-use crate::video::frame_hub::LatestFrameHub;
+use crate::video::custom_block_receiver::CustomBlockStats;
 use crate::video::decoder::{MOCK_DECODER_ENABLED, REAL_DECODER_ENABLED};
-use tokio::sync::mpsc;
+use crate::video::frame_hub::LatestFrameHub;
+use crate::video::reassembler::FrameReassembler;
+use crate::video::source::{ClientMode, CodecMode, CustomBlockParserMode, VideoPipelineConfig, VideoSource};
 use serde::Serialize;
 use std::sync::Arc;
 use std::time::{Duration, Instant, SystemTime, UNIX_EPOCH};
 use tauri::Emitter;
 use tokio::net::UdpSocket;
+use tokio::sync::mpsc;
+use tokio::sync::Mutex;
 use tokio::sync::oneshot;
 use tokio::time::MissedTickBehavior;
 
@@ -27,7 +30,18 @@ pub struct VideoStatsPayload {
   pub latest_frame_age_ms: Option<u128>,
   pub is_rendering_real_frame: bool,
   pub real_decoder_enabled: bool,
-  pub mock_decoder_enabled: bool,
+  pub stub_decoder_enabled: bool,
+  pub current_mode: ClientMode,
+  pub current_video_source: VideoSource,
+  pub current_codec_mode: CodecMode,
+  pub current_decoder_name: String,
+  pub decoder_init_success: bool,
+  pub custom_block_packets_received: u64,
+  pub custom_block_bytes_received: u64,
+  pub custom_block_ready_frames: u64,
+  pub custom_block_invalid_packets: u64,
+  pub custom_block_parser_mode: CustomBlockParserMode,
+  pub custom_block_mock_active: bool,
 }
 
 pub struct VideoRuntime {
@@ -56,6 +70,8 @@ pub fn spawn_video_receiver_with_decoder(
   port: u16,
   decoder_input_tx: mpsc::Sender<Vec<u8>>,
   frame_hub: Arc<LatestFrameHub>,
+  video_config: Arc<Mutex<VideoPipelineConfig>>,
+  custom_block_stats: Arc<Mutex<CustomBlockStats>>,
 ) -> VideoRuntime {
   let (stop_tx, mut stop_rx) = oneshot::channel::<()>();
 
@@ -82,7 +98,18 @@ pub fn spawn_video_receiver_with_decoder(
             latest_frame_age_ms: None,
             is_rendering_real_frame: false,
             real_decoder_enabled: REAL_DECODER_ENABLED,
-            mock_decoder_enabled: MOCK_DECODER_ENABLED,
+            stub_decoder_enabled: MOCK_DECODER_ENABLED,
+            current_mode: ClientMode::Normal,
+            current_video_source: VideoSource::UdpHevc,
+            current_codec_mode: CodecMode::Hevc,
+            current_decoder_name: CodecMode::Hevc.decoder_name(REAL_DECODER_ENABLED),
+            decoder_init_success: false,
+            custom_block_packets_received: 0,
+            custom_block_bytes_received: 0,
+            custom_block_ready_frames: 0,
+            custom_block_invalid_packets: 0,
+            custom_block_parser_mode: CustomBlockParserMode::RawAnnexBStream,
+            custom_block_mock_active: false,
           },
         );
         return;
@@ -114,6 +141,8 @@ pub fn spawn_video_receiver_with_decoder(
             packet_loss_count,
             last_packet_instant,
             last_frame_at.clone(),
+            &video_config,
+            &custom_block_stats,
           ).await;
           emit_video_stats(&app, payload);
         }
@@ -159,6 +188,8 @@ pub fn spawn_video_receiver_with_decoder(
       packet_loss_count,
       None,
       last_frame_at,
+      &video_config,
+      &custom_block_stats,
     ).await;
     emit_video_stats(&app, payload);
   });
@@ -173,10 +204,17 @@ async fn build_stats_payload(
   packet_loss_count: u64,
   last_packet_instant: Option<Instant>,
   last_frame_at: Option<String>,
+  video_config: &Arc<Mutex<VideoPipelineConfig>>,
+  custom_block_stats: &Arc<Mutex<CustomBlockStats>>,
 ) -> VideoStatsPayload {
   let stats = reassembler.stats();
   let decoder_stats = frame_hub.decoder_stats().await;
   let frame_age = frame_hub.latest_frame_age_ms().await;
+  let pipeline_config = video_config.lock().await.clone();
+  let custom_stats = custom_block_stats
+    .lock()
+    .await
+    .payload(pipeline_config.custom_block_parser_mode);
   let stream_alive = last_packet_instant
     .map(|ts| ts.elapsed() <= Duration::from_secs(2))
     .unwrap_or(false);
@@ -196,8 +234,29 @@ async fn build_stats_payload(
     latest_frame_age_ms: frame_age,
     is_rendering_real_frame: frame_age.is_some(),
     real_decoder_enabled: REAL_DECODER_ENABLED,
-    mock_decoder_enabled: MOCK_DECODER_ENABLED,
+    stub_decoder_enabled: MOCK_DECODER_ENABLED,
+    current_mode: pipeline_config.current_mode,
+    current_video_source: pipeline_config.current_video_source,
+    current_codec_mode: pipeline_config.current_codec_mode,
+    current_decoder_name: decoder_name_or_default(
+      decoder_stats.current_decoder_name,
+      pipeline_config.current_codec_mode,
+    ),
+    decoder_init_success: decoder_stats.decoder_init_success,
+    custom_block_packets_received: custom_stats.custom_block_packets_received,
+    custom_block_bytes_received: custom_stats.custom_block_bytes_received,
+    custom_block_ready_frames: custom_stats.custom_block_ready_frames,
+    custom_block_invalid_packets: custom_stats.custom_block_invalid_packets,
+    custom_block_parser_mode: custom_stats.custom_block_parser_mode,
+    custom_block_mock_active: custom_stats.custom_block_mock_active,
   }
+}
+
+fn decoder_name_or_default(current_decoder_name: String, codec_mode: CodecMode) -> String {
+  if current_decoder_name.trim().is_empty() {
+    return codec_mode.decoder_name(REAL_DECODER_ENABLED);
+  }
+  current_decoder_name
 }
 
 fn emit_video_stats(app: &tauri::AppHandle, payload: VideoStatsPayload) {

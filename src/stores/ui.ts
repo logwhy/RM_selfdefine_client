@@ -16,7 +16,7 @@ const defaultCrosshairConfig: CrosshairConfig = {
 export const useUiStore = defineStore('ui', () => {
   const state = reactive({
     ...defaultCrosshairConfig,
-    showDebug: true,
+    showDebug: false,
   })
 
   function restore() {

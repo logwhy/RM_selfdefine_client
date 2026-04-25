@@ -19,6 +19,10 @@ pub fn run() {
       commands::video::stop_mock_video_source,
       commands::video::start_mock_video,
       commands::video::stop_mock_video,
+      commands::video::set_video_pipeline_config,
+      commands::video::start_hero_lob_video,
+      commands::video::start_mock_hero_lob_h264,
+      commands::video::stop_mock_hero_lob_h264,
       commands::video::reset_video_stats,
       commands::video::get_latest_frame,
       commands::video::get_decoder_mode

@@ -1,4 +1,9 @@
 export interface VideoStatsPayload {
+  currentMode: ClientMode
+  currentVideoSource: VideoSource
+  currentCodecMode: CodecMode
+  currentDecoderName: string
+  decoderInitSuccess: boolean
   streamAlive: boolean
   packetLossCount: number
   lastFrameAt: string | null
@@ -13,7 +18,13 @@ export interface VideoStatsPayload {
   latestFrameAgeMs: number | null
   isRenderingRealFrame: boolean
   realDecoderEnabled: boolean
-  mockDecoderEnabled: boolean
+  stubDecoderEnabled: boolean
+  customBlockPacketsReceived: number
+  customBlockBytesReceived: number
+  customBlockReadyFrames: number
+  customBlockInvalidPackets: number
+  customBlockParserMode: CustomBlockParserMode
+  customBlockMockActive: boolean
 }
 
 export interface VideoCommandResult {
@@ -31,5 +42,17 @@ export interface LatestFramePayload {
 
 export interface DecoderModeResult {
   realDecoderEnabled: boolean
-  mockDecoderEnabled: boolean
+  stubDecoderEnabled: boolean
+}
+
+export type ClientMode = 'normal' | 'hero_lob'
+export type VideoSource = 'udp_hevc' | 'custombyteblock_h264' | 'mock'
+export type CodecMode = 'auto' | 'hevc' | 'h264'
+export type CustomBlockParserMode = 'raw_annexb_stream' | 'packetized_frame'
+
+export interface VideoPipelineConfigInput {
+  currentMode: ClientMode
+  currentVideoSource: VideoSource
+  currentCodecMode: CodecMode
+  customBlockParserMode: CustomBlockParserMode
 }

@@ -24,15 +24,12 @@ const canvasRef = ref<HTMLCanvasElement | null>(null)
 const videoStore = useVideoStore()
 const hasFrame = ref(false)
 let pollingTimer: number | null = null
+
 const crosshairLength = computed(() => 24 * props.displayScale)
 const crosshairGap = computed(() => 8 * props.displayScale)
 const statusText = computed(() => {
-  if (!videoStore.streamAlive) {
-    return '视频流未连接'
-  }
-  if (!hasFrame.value) {
-    return '等待解码首帧...'
-  }
+  if (!videoStore.streamAlive) return '视频流未连接'
+  if (!hasFrame.value) return '等待解码首帧...'
   return ''
 })
 
@@ -57,12 +54,12 @@ function drawPlaceholder() {
   const { ctx, width, height } = context
 
   ctx.clearRect(0, 0, width, height)
-  ctx.fillStyle = '#000000'
+  ctx.fillStyle = '#02070d'
   ctx.fillRect(0, 0, width, height)
   drawOverlay(ctx, width, height)
 
   if (statusText.value) {
-    ctx.fillStyle = '#7c8596'
+    ctx.fillStyle = '#8ca6b8'
     ctx.font = '15px Segoe UI'
     ctx.textAlign = 'center'
     ctx.fillText(statusText.value, width / 2, height - 24)
@@ -75,7 +72,9 @@ function drawOverlay(ctx: CanvasRenderingContext2D, width: number, height: numbe
   const length = crosshairLength.value
   const gap = crosshairGap.value
 
-  ctx.strokeStyle = '#34d399'
+  ctx.strokeStyle = '#19f7ff'
+  ctx.shadowColor = 'rgba(25, 247, 255, 0.55)'
+  ctx.shadowBlur = 8
   ctx.lineWidth = props.lineWidth
   ctx.beginPath()
   ctx.moveTo(centerX - gap - length, centerY)
@@ -87,9 +86,10 @@ function drawOverlay(ctx: CanvasRenderingContext2D, width: number, height: numbe
   ctx.moveTo(centerX, centerY + gap)
   ctx.lineTo(centerX, centerY + gap + length)
   ctx.stroke()
+  ctx.shadowBlur = 0
 
   if (props.showCenterDot) {
-    ctx.fillStyle = '#34d399'
+    ctx.fillStyle = '#35ff9b'
     ctx.beginPath()
     ctx.arc(centerX, centerY, Math.max(2, props.lineWidth), 0, Math.PI * 2)
     ctx.fill()
@@ -106,8 +106,8 @@ async function pollLatestFrame() {
 
       const rgba = Uint8ClampedArray.from(frame.rgba)
       const imageData = new ImageData(rgba, frame.width, frame.height)
-
       const bitmap = await createImageBitmap(imageData)
+
       ctx.clearRect(0, 0, width, height)
       ctx.drawImage(bitmap, 0, 0, width, height)
       bitmap.close()
@@ -121,13 +121,13 @@ async function pollLatestFrame() {
     console.warn('poll latest frame failed', error)
   }
 
-  drawPlaceholder()
+  if (!hasFrame.value || !videoStore.streamAlive) {
+    drawPlaceholder()
+  }
 }
 
 function startPolling() {
-  if (pollingTimer !== null) {
-    window.clearInterval(pollingTimer)
-  }
+  if (pollingTimer !== null) window.clearInterval(pollingTimer)
   pollingTimer = window.setInterval(() => {
     void pollLatestFrame()
   }, 33)
@@ -157,9 +157,7 @@ watch(
 watch(
   () => videoStore.streamAlive,
   () => {
-    if (!videoStore.streamAlive) {
-      hasFrame.value = false
-    }
+    if (!videoStore.streamAlive) hasFrame.value = false
     void pollLatestFrame()
   },
 )
@@ -175,16 +173,20 @@ watch(
 .video-canvas-wrapper {
   width: 100%;
   height: 100%;
-  min-height: 480px;
-  border-radius: 10px;
-  border: 1px solid #2d333d;
+  min-height: 0;
+  border: 1px solid #26384f;
+  border-radius: 4px;
   overflow: hidden;
+  background:
+    radial-gradient(circle at center, rgba(25, 247, 255, 0.08), transparent 34%),
+    #02070d;
+  box-shadow: inset 0 0 42px rgba(25, 247, 255, 0.08);
 }
 
 .video-canvas {
   display: block;
   width: 100%;
   height: 100%;
-  background: #000;
+  background: #02070d;
 }
 </style>

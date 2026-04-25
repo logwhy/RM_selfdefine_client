@@ -32,6 +32,7 @@ export function useModeSync() {
       commandMessage.value = result.message
     } catch (error) {
       commandMessage.value = `连接失败: ${String(error)}`
+      throw error
     }
   }
 
@@ -42,6 +43,7 @@ export function useModeSync() {
       modeStore.resetModeSync()
     } catch (error) {
       commandMessage.value = `断开失败: ${String(error)}`
+      throw error
     }
   }
 
@@ -51,6 +53,7 @@ export function useModeSync() {
       commandMessage.value = result.message
     } catch (error) {
       commandMessage.value = `Mock 发送失败: ${String(error)}`
+      throw error
     }
   }
 

@@ -1,0 +1,55 @@
+.tactical-page {
+  position: relative;
+  height: 100vh;
+  min-width: 0;
+  display: grid;
+  grid-template-rows: 62px minmax(0, 1fr) 52px;
+  gap: 8px;
+  padding: 8px;
+  overflow: hidden;
+  background:
+    linear-gradient(90deg, rgba(25, 247, 255, 0.04) 1px, transparent 1px),
+    linear-gradient(180deg, rgba(25, 247, 255, 0.035) 1px, transparent 1px),
+    radial-gradient(circle at center, rgba(46, 123, 255, 0.06), transparent 42%),
+    transparent;
+  background-size: 42px 42px, 42px 42px, auto;
+}
+
+.tactical-stage {
+  position: relative;
+  min-width: 0;
+  min-height: 0;
+}
+
+.tactical-stage::before {
+  position: absolute;
+  inset: 10px;
+  z-index: 2;
+  border: 1px solid rgba(25, 247, 255, 0.14);
+  content: '';
+  pointer-events: none;
+}
+
+.tactical-stage::after {
+  position: absolute;
+  inset: 0;
+  z-index: 1;
+  background:
+    linear-gradient(90deg, rgba(25, 247, 255, 0.07), transparent 18%, transparent 82%, rgba(255, 59, 59, 0.06)),
+    linear-gradient(180deg, rgba(255, 255, 255, 0.035), transparent 12%, transparent 88%, rgba(25, 247, 255, 0.05));
+  content: '';
+  pointer-events: none;
+}
+
+.tactical-drawer-section {
+  display: flex;
+  flex-direction: column;
+  gap: 12px;
+}
+
+.tactical-command-message {
+  min-height: 18px;
+  margin: 0;
+  color: var(--rm-muted);
+  font-size: 12px;
+}

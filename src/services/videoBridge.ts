@@ -3,6 +3,7 @@ import { listen, type UnlistenFn } from '@tauri-apps/api/event'
 import type {
   DecoderModeResult,
   LatestFramePayload,
+  VideoPipelineConfigInput,
   VideoCommandResult,
   VideoStatsPayload,
 } from '../types/video'
@@ -14,11 +15,11 @@ function isTauriRuntime(): boolean {
   return typeof window !== 'undefined' && '__TAURI_INTERNALS__' in window
 }
 
-export async function startVideo(port: number): Promise<VideoCommandResult> {
+export async function startVideo(port: number, codecMode: 'auto' | 'hevc' | 'h264' = 'hevc'): Promise<VideoCommandResult> {
   if (!isTauriRuntime()) {
     return { success: false, message: 'Tauri backend not available in browser mode' }
   }
-  return invoke<VideoCommandResult>('start_video', { port })
+  return invoke<VideoCommandResult>('start_video', { port, codecMode })
 }
 
 export async function stopVideo(): Promise<VideoCommandResult> {
@@ -42,6 +43,36 @@ export async function stopMockVideoSource(): Promise<VideoCommandResult> {
   return invoke<VideoCommandResult>('stop_mock_video')
 }
 
+export async function setVideoPipelineConfig(
+  config: VideoPipelineConfigInput,
+): Promise<VideoCommandResult> {
+  if (!isTauriRuntime()) {
+    return { success: false, message: 'Tauri backend not available in browser mode' }
+  }
+  return invoke<VideoCommandResult>('set_video_pipeline_config', { config })
+}
+
+export async function startHeroLobVideo(): Promise<VideoCommandResult> {
+  if (!isTauriRuntime()) {
+    return { success: false, message: 'Tauri backend not available in browser mode' }
+  }
+  return invoke<VideoCommandResult>('start_hero_lob_video')
+}
+
+export async function startMockHeroLobH264(): Promise<VideoCommandResult> {
+  if (!isTauriRuntime()) {
+    return { success: false, message: 'Tauri backend not available in browser mode' }
+  }
+  return invoke<VideoCommandResult>('start_mock_hero_lob_h264')
+}
+
+export async function stopMockHeroLobH264(): Promise<VideoCommandResult> {
+  if (!isTauriRuntime()) {
+    return { success: false, message: 'Tauri backend not available in browser mode' }
+  }
+  return invoke<VideoCommandResult>('stop_mock_hero_lob_h264')
+}
+
 export async function resetVideoStats(): Promise<VideoCommandResult> {
   if (!isTauriRuntime()) {
     return { success: false, message: 'Tauri backend not available in browser mode' }
@@ -62,7 +93,7 @@ export async function getLatestFrame(
 
 export async function getDecoderMode(): Promise<DecoderModeResult> {
   if (!isTauriRuntime()) {
-    return { realDecoderEnabled: false, mockDecoderEnabled: true }
+    return { realDecoderEnabled: false, stubDecoderEnabled: true }
   }
   return invoke<DecoderModeResult>('get_decoder_mode')
 }
