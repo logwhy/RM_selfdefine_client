@@ -16,10 +16,13 @@ import {
 } from 'naive-ui'
 import CrosshairPanel from '../components/CrosshairPanel.vue'
 import DebugPanel from '../components/DebugPanel.vue'
-import FloatingActionDock from '../components/FloatingActionDock.vue'
+import RmBottomShortcutBar from '../components/RmBottomShortcutBar.vue'
+import RmCrosshairHud from '../components/RmCrosshairHud.vue'
 import RmHudPanel from '../components/RmHudPanel.vue'
-import TacticalBottomBar from '../components/TacticalBottomBar.vue'
-import TacticalTopBar from '../components/TacticalTopBar.vue'
+import RmLeftInfoRail from '../components/RmLeftInfoRail.vue'
+import RmLinkMonitor from '../components/RmLinkMonitor.vue'
+import RmQuickActionPanel from '../components/RmQuickActionPanel.vue'
+import RmTopStatusBar from '../components/RmTopStatusBar.vue'
 import VideoCanvas from '../components/VideoCanvas.vue'
 import { useModeSync } from '../composables/useModeSync'
 import { useUiPersistence } from '../composables/useUiPersistence'
@@ -64,6 +67,7 @@ const switching = ref<SwitchingMode>(null)
 const lastError = ref('')
 const successMessage = ref('')
 const runtimeSeconds = ref(0)
+const systemMessages = ref<string[]>([])
 
 let runtimeTimer: number | null = null
 let toastTimer: number | null = null
@@ -93,6 +97,7 @@ function handleDrawerVisible(value: boolean) {
 
 function showSuccess(message: string) {
   successMessage.value = message
+  pushMessage(message)
   if (toastTimer !== null) {
     window.clearTimeout(toastTimer)
   }
@@ -100,6 +105,10 @@ function showSuccess(message: string) {
     successMessage.value = ''
     toastTimer = null
   }, 1000)
+}
+
+function pushMessage(message: string) {
+  systemMessages.value = [`${runtimeText.value} ${message}`, ...systemMessages.value].slice(0, 5)
 }
 
 async function runSwitch(mode: Exclude<SwitchingMode, null>, action: () => Promise<void>) {
@@ -111,6 +120,7 @@ async function runSwitch(mode: Exclude<SwitchingMode, null>, action: () => Promi
     showSuccess(mode === 'hero_lob' ? 'HERO LOB READY' : 'NORMAL VIDEO READY')
   } catch (error) {
     lastError.value = String(error)
+    pushMessage(`ERROR ${String(error)}`)
   } finally {
     switching.value = null
   }
@@ -147,10 +157,47 @@ function toggleFullscreen() {
   }
 }
 
+function isTypingTarget(target: EventTarget | null) {
+  const element = target as HTMLElement | null
+  if (!element) return false
+  const tag = element.tagName.toLowerCase()
+  return tag === 'input' || tag === 'textarea' || element.isContentEditable
+}
+
 function handleKeydown(event: KeyboardEvent) {
+  if (isTypingTarget(event.target)) return
   if (event.key === 'F11') {
     event.preventDefault()
     toggleFullscreen()
+    return
+  }
+  if (event.key === 'Escape') {
+    drawerVisible.value = false
+    activeDrawer.value = null
+    return
+  }
+  const key = event.key.toLowerCase()
+  if (key === 'h') {
+    void quickHeroLob()
+  } else if (key === 'n') {
+    void quickNormal()
+  } else if (key === 'p') {
+    openDrawer('params')
+  } else if (key === 'd') {
+    openDrawer('debug')
+  } else if (key === 'c') {
+    openDrawer('comm')
+  } else if (key === 's') {
+    uiStore.save()
+    showSuccess('CROSSHAIR SAVED')
+  } else if (event.key === 'ArrowUp') {
+    uiStore.crosshairOffsetY -= 1
+  } else if (event.key === 'ArrowDown') {
+    uiStore.crosshairOffsetY += 1
+  } else if (event.key === 'ArrowLeft') {
+    uiStore.crosshairOffsetX -= 1
+  } else if (event.key === 'ArrowRight') {
+    uiStore.crosshairOffsetX += 1
   }
 }
 
@@ -169,10 +216,8 @@ onBeforeUnmount(() => {
 </script>
 
 <template>
-  <div class="tactical-page">
-    <TacticalTopBar :last-error="lastError" :runtime-text="runtimeText" />
-
-    <main class="tactical-stage rm-corners">
+  <div class="rm-operator-shell">
+    <div class="rm-operator-video">
       <VideoCanvas
         :offset-x="crosshairOffsetX"
         :offset-y="crosshairOffsetY"
@@ -180,19 +225,12 @@ onBeforeUnmount(() => {
         :display-scale="displayScale"
         :show-center-dot="showCenterDot"
       />
-      <div class="stage-label left">
-        <span>HERO OPTICAL FEED</span>
-        <strong>{{ videoStore.currentMode === 'hero_lob' ? '0x0310 / H264' : 'UDP 3334 / HEVC' }}</strong>
-      </div>
-      <div class="stage-label right">
-        <span>DECODER</span>
-        <strong>{{ videoStore.currentDecoderName }}</strong>
-      </div>
-    </main>
+    </div>
 
-    <TacticalBottomBar :last-error="lastError" />
-
-    <FloatingActionDock
+    <RmTopStatusBar :last-error="lastError" :runtime-text="runtimeText" />
+    <RmLeftInfoRail :last-error="lastError" :messages="systemMessages" />
+    <RmCrosshairHud :success-message="successMessage" />
+    <RmQuickActionPanel
       :switching="switching"
       :success-message="successMessage"
       @hero-lob="quickHeroLob"
@@ -200,6 +238,9 @@ onBeforeUnmount(() => {
       @open="openDrawer"
       @fullscreen="toggleFullscreen"
     />
+    <RmLinkMonitor />
+    <RmBottomShortcutBar />
+
 
     <n-drawer
       :show="drawerVisible"
@@ -308,32 +349,4 @@ onBeforeUnmount(() => {
 </template>
 
 <style scoped>
-.stage-label {
-  position: absolute;
-  z-index: 4;
-  top: 18px;
-  display: flex;
-  flex-direction: column;
-  gap: 3px;
-  padding: 8px 10px;
-  border: 1px solid rgba(25, 247, 255, 0.28);
-  background: rgba(5, 12, 20, 0.62);
-  color: var(--rm-muted);
-  font-size: 10px;
-  letter-spacing: 0.12em;
-}
-
-.stage-label strong {
-  color: var(--rm-cyan);
-  font-size: 12px;
-}
-
-.stage-label.left {
-  left: 18px;
-}
-
-.stage-label.right {
-  right: 18px;
-  text-align: right;
-}
 </style>

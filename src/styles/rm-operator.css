@@ -1,0 +1,74 @@
+:root {
+  --rm-op-bg: #030608;
+  --rm-op-panel: rgba(8, 12, 18, 0.78);
+  --rm-op-panel-strong: rgba(13, 18, 28, 0.92);
+  --rm-op-cyan: #00e5ff;
+  --rm-op-blue: #2b7cff;
+  --rm-op-red: #ff3045;
+  --rm-op-purple: #8a4dff;
+  --rm-op-yellow: #ffc93a;
+  --rm-op-green: #2cff8c;
+  --rm-op-text: #eaf7ff;
+  --rm-op-muted: #8b9baa;
+}
+
+.rm-operator-shell {
+  position: relative;
+  height: 100vh;
+  overflow: hidden;
+  background:
+    radial-gradient(circle at 50% 44%, rgba(0, 229, 255, 0.06), transparent 28%),
+    radial-gradient(circle at 12% 88%, rgba(43, 124, 255, 0.08), transparent 24%),
+    radial-gradient(circle at 92% 22%, rgba(255, 48, 69, 0.06), transparent 22%),
+    var(--rm-op-bg);
+  color: var(--rm-op-text);
+}
+
+.rm-operator-video {
+  position: absolute;
+  inset: 0;
+  z-index: 1;
+}
+
+.rm-operator-video::after {
+  position: absolute;
+  inset: 0;
+  z-index: 2;
+  background:
+    linear-gradient(90deg, rgba(0, 229, 255, 0.05), transparent 18%, transparent 82%, rgba(255, 48, 69, 0.045)),
+    linear-gradient(180deg, rgba(255, 255, 255, 0.018), transparent 16%, transparent 86%, rgba(0, 229, 255, 0.04));
+  content: '';
+  pointer-events: none;
+}
+
+.rm-glass-panel {
+  border: 1px solid rgba(0, 229, 255, 0.28);
+  background:
+    linear-gradient(135deg, rgba(0, 229, 255, 0.07), transparent 42%),
+    var(--rm-op-panel);
+  box-shadow: 0 0 22px rgba(0, 229, 255, 0.12), inset 0 0 18px rgba(0, 229, 255, 0.05);
+  backdrop-filter: blur(12px);
+}
+
+.rm-angular {
+  clip-path: polygon(10px 0, 100% 0, 100% calc(100% - 10px), calc(100% - 10px) 100%, 0 100%, 0 10px);
+}
+
+.rm-key {
+  display: inline-flex;
+  min-width: 22px;
+  height: 20px;
+  align-items: center;
+  justify-content: center;
+  padding: 0 6px;
+  border: 1px solid rgba(234, 247, 255, 0.24);
+  border-radius: 4px;
+  background: rgba(234, 247, 255, 0.1);
+  color: var(--rm-op-text);
+  font-size: 11px;
+  font-weight: 800;
+}
+
+.rm-hud-drawer .n-drawer-content {
+  background: linear-gradient(180deg, rgba(9, 13, 20, 0.98), rgba(3, 6, 8, 0.98));
+}

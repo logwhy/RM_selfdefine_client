@@ -3,7 +3,7 @@ import { createPinia } from 'pinia'
 import './style.css'
 import './styles/rm-theme.css'
 import './styles/rm-hud.css'
-import './styles/tactical-layout.css'
+import './styles/rm-operator.css'
 import App from './App.vue'
 import { router } from './router'
 
