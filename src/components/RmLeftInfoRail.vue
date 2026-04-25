@@ -1,6 +1,7 @@
 <script setup lang="ts">
 import { computed } from 'vue'
 import { useModeStore } from '../stores/mode'
+import { useUiStore } from '../stores/ui'
 import { useVideoStore } from '../stores/video'
 
 const props = defineProps<{
@@ -9,11 +10,15 @@ const props = defineProps<{
 }>()
 
 const modeStore = useModeStore()
+const uiStore = useUiStore()
 const videoStore = useVideoStore()
 const deployText = computed(() => {
   if (modeStore.deployModeState === 'active') return '已部署'
   if (modeStore.deployModeState === 'inactive') return '未部署'
   return '未知'
+})
+const activePresetName = computed(() => {
+  return uiStore.crosshairPresets.find((preset) => preset.id === uiStore.activePresetId)?.name ?? '默认'
 })
 </script>
 
@@ -27,7 +32,7 @@ const deployText = computed(() => {
       <p><span>部署模式</span><b>{{ deployText }}</b></p>
       <p><span>MQTT</span><b :class="modeStore.mqttConnected ? 'ok' : 'bad'">{{ modeStore.mqttConnected ? 'ONLINE' : 'OFFLINE' }}</b></p>
       <p><span>CustomBlock</span><b :class="videoStore.customBlockPacketsReceived > 0 ? 'ok' : ''">{{ videoStore.customBlockPacketsReceived }}</b></p>
-      <p><span>准星预设</span><b>DEFAULT</b></p>
+      <p><span>准星预设</span><b>{{ activePresetName }}</b></p>
     </div>
     <div class="message-list">
       <h4>系统消息</h4>

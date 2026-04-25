@@ -1,5 +1,6 @@
 <script setup lang="ts">
-import { computed, onBeforeUnmount, onMounted, ref } from 'vue'
+import { computed, onBeforeUnmount, onMounted, ref, watch } from 'vue'
+import { getCurrentWindow } from '@tauri-apps/api/window'
 import { storeToRefs } from 'pinia'
 import {
   NButton,
@@ -63,15 +64,22 @@ const {
 
 const activeDrawer = ref<DrawerKey>(null)
 const drawerVisible = ref(false)
+const helpVisible = ref(false)
 const switching = ref<SwitchingMode>(null)
 const lastError = ref('')
 const successMessage = ref('')
 const runtimeSeconds = ref(0)
 const systemMessages = ref<string[]>([])
 const rightPanelCollapsed = ref(false)
+const isCompetitionFullscreen = ref(false)
 
 let runtimeTimer: number | null = null
 let toastTimer: number | null = null
+let lastRuntimeWarning = ''
+
+function handleBrowserFullscreenChange() {
+  if (!isTauriRuntime()) isCompetitionFullscreen.value = Boolean(document.fullscreenElement)
+}
 
 const parserOptions = [
   { label: 'raw_annexb_stream', value: 'raw_annexb_stream' },
@@ -84,7 +92,17 @@ const runtimeText = computed(() => {
   return `${String(minutes).padStart(2, '0')}:${String(seconds).padStart(2, '0')}`
 })
 
+const activePresetName = computed(() => {
+  return uiStore.crosshairPresets.find((preset) => preset.id === uiStore.activePresetId)?.name ?? '默认'
+})
+const visibleCrosshairColor = computed(() => uiStore.crosshairColor ?? '#19f7ff')
+
 function openDrawer(key: Exclude<DrawerKey, null>) {
+  if (activeDrawer.value === key && drawerVisible.value) {
+    handleDrawerVisible(false)
+    return
+  }
+  helpVisible.value = false
   activeDrawer.value = key
   drawerVisible.value = true
 }
@@ -96,20 +114,33 @@ function handleDrawerVisible(value: boolean) {
   }
 }
 
-function showSuccess(message: string) {
+function showToast(message: string, level: 'ok' | 'error' | 'info' = 'ok') {
   successMessage.value = message
-  pushMessage(message)
+  pushMessage(level === 'error' ? `ERROR ${message}` : message)
+  if (level === 'error') lastError.value = message
   if (toastTimer !== null) {
     window.clearTimeout(toastTimer)
   }
   toastTimer = window.setTimeout(() => {
     successMessage.value = ''
     toastTimer = null
-  }, 1000)
+  }, 1400)
 }
 
 function pushMessage(message: string) {
   systemMessages.value = [`${runtimeText.value} ${message}`, ...systemMessages.value].slice(0, 5)
+}
+
+function modeStatusWarning() {
+  if (videoStore.currentMode === 'hero_lob') {
+    if (!modeStore.mqttConnected) return 'MQTT 未连接'
+    if (videoStore.customBlockPacketsReceived === 0 && !videoStore.customBlockMockActive) return '未收到 CustomBlock / 0x0310'
+    if (!videoStore.h264SeenSps || !videoStore.h264SeenPps) return 'H264 等待 SPS/PPS'
+    if (!videoStore.decoderInitSuccess && videoStore.realDecoderEnabled) return 'H264 decoder 未就绪'
+    if (videoStore.h264ConsecutiveDecodeErrors > 0) return 'decoder 异常'
+  }
+  if (!videoStore.streamAlive) return '视频断流'
+  return ''
 }
 
 async function runSwitch(mode: Exclude<SwitchingMode, null>, action: () => Promise<void>) {
@@ -118,10 +149,17 @@ async function runSwitch(mode: Exclude<SwitchingMode, null>, action: () => Promi
   lastError.value = ''
   try {
     await action()
-    showSuccess(mode === 'hero_lob' ? 'HERO LOB READY' : 'NORMAL VIDEO READY')
+    const warning = modeStatusWarning()
+    if (warning && mode === 'hero_lob') {
+      lastError.value = warning
+      showToast(warning, 'info')
+    } else {
+      showToast(mode === 'hero_lob' ? '英雄吊射模式已就绪' : '普通图传模式已就绪')
+    }
   } catch (error) {
-    lastError.value = String(error)
-    pushMessage(`ERROR ${String(error)}`)
+    const message = String(error)
+    lastError.value = message
+    showToast(message, 'error')
   } finally {
     switching.value = null
   }
@@ -131,12 +169,13 @@ async function quickHeroLob() {
   await runSwitch('hero_lob', async () => {
     await handleStopVideo()
     if (!modeStore.mqttConnected) {
-      await handleConnect()
+      try {
+        await handleConnect()
+      } catch (error) {
+        throw new Error(`MQTT 未连接: ${String(error)}`)
+      }
     }
     await handleUseHeroLobMode(videoStore.customBlockParserMode)
-    if (!modeStore.mqttConnected) {
-      lastError.value = 'MQTT is connecting or unavailable; CustomByteBlock will start after connection.'
-    }
   })
 }
 
@@ -148,33 +187,91 @@ async function quickNormal() {
   })
 }
 
-function toggleFullscreen() {
+function isTauriRuntime(): boolean {
+  return typeof window !== 'undefined' && '__TAURI_INTERNALS__' in window
+}
+
+async function setCompetitionFullscreen(next: boolean) {
   drawerVisible.value = false
   activeDrawer.value = null
-  if (!document.fullscreenElement) {
-    void document.documentElement.requestFullscreen()
+  helpVisible.value = false
+  if (isTauriRuntime()) {
+    const appWindow = getCurrentWindow()
+    await appWindow.setFullscreen(next)
+    isCompetitionFullscreen.value = await appWindow.isFullscreen()
+  } else if (next && !document.fullscreenElement) {
+    await document.documentElement.requestFullscreen()
+    isCompetitionFullscreen.value = true
+  } else if (!next && document.fullscreenElement) {
+    await document.exitFullscreen()
+    isCompetitionFullscreen.value = false
   } else {
-    void document.exitFullscreen()
+    isCompetitionFullscreen.value = next
   }
+  showToast(isCompetitionFullscreen.value ? '已进入全屏比赛模式' : '已退出全屏比赛模式', 'info')
+}
+
+async function toggleFullscreen() {
+  await setCompetitionFullscreen(!isCompetitionFullscreen.value)
 }
 
 function isTypingTarget(target: EventTarget | null) {
   const element = target as HTMLElement | null
   if (!element) return false
   const tag = element.tagName.toLowerCase()
-  return tag === 'input' || tag === 'textarea' || element.isContentEditable
+  return tag === 'input' || tag === 'textarea' || tag === 'select' || element.isContentEditable
+}
+
+function adjustCrosshair(event: KeyboardEvent) {
+  const step = event.shiftKey ? 8 : event.ctrlKey ? 0.2 : 1
+  if (event.key === 'ArrowUp') uiStore.crosshairOffsetY -= step
+  if (event.key === 'ArrowDown') uiStore.crosshairOffsetY += step
+  if (event.key === 'ArrowLeft') uiStore.crosshairOffsetX -= step
+  if (event.key === 'ArrowRight') uiStore.crosshairOffsetX += step
+}
+
+function handlePresetShortcut(id: 1 | 2 | 3, savePreset: boolean) {
+  if (savePreset) {
+    const preset = uiStore.saveCurrentToPreset(id)
+    if (preset) showToast(`已保存预设：${preset.name}`, 'info')
+    return
+  }
+  const preset = uiStore.applyPreset(id)
+  if (preset) showToast(`已切换：${preset.name}`, 'info')
 }
 
 function handleKeydown(event: KeyboardEvent) {
   if (isTypingTarget(event.target)) return
-  if (event.key === 'F11') {
+  if (['Tab', 'F11', 'Escape', 'ArrowUp', 'ArrowDown', 'ArrowLeft', 'ArrowRight'].includes(event.key)) {
     event.preventDefault()
-    toggleFullscreen()
+  }
+  if (event.key === 'Tab') {
+    helpVisible.value = !helpVisible.value
+    if (helpVisible.value) handleDrawerVisible(false)
+    return
+  }
+  if (event.key === 'F11') {
+    void toggleFullscreen()
     return
   }
   if (event.key === 'Escape') {
-    drawerVisible.value = false
-    activeDrawer.value = null
+    if (helpVisible.value) {
+      helpVisible.value = false
+      return
+    }
+    if (drawerVisible.value) {
+      handleDrawerVisible(false)
+      return
+    }
+    if (isCompetitionFullscreen.value) void setCompetitionFullscreen(false)
+    return
+  }
+  if (event.key.startsWith('Arrow')) {
+    adjustCrosshair(event)
+    return
+  }
+  if (['1', '2', '3'].includes(event.key)) {
+    handlePresetShortcut(Number(event.key) as 1 | 2 | 3, event.ctrlKey)
     return
   }
   const key = event.key.toLowerCase()
@@ -188,17 +285,12 @@ function handleKeydown(event: KeyboardEvent) {
     openDrawer('debug')
   } else if (key === 'c') {
     openDrawer('comm')
+  } else if (key === 'r') {
+    uiStore.resetDefaults()
+    showToast('准星已恢复默认', 'info')
   } else if (key === 's') {
     uiStore.save()
-    showSuccess('CROSSHAIR SAVED')
-  } else if (event.key === 'ArrowUp') {
-    uiStore.crosshairOffsetY -= 1
-  } else if (event.key === 'ArrowDown') {
-    uiStore.crosshairOffsetY += 1
-  } else if (event.key === 'ArrowLeft') {
-    uiStore.crosshairOffsetX -= 1
-  } else if (event.key === 'ArrowRight') {
-    uiStore.crosshairOffsetX += 1
+    showToast('准星配置已保存', 'info')
   }
 }
 
@@ -207,17 +299,42 @@ onMounted(() => {
     runtimeSeconds.value += 1
   }, 1000)
   window.addEventListener('keydown', handleKeydown)
+  document.addEventListener('fullscreenchange', handleBrowserFullscreenChange)
 })
 
 onBeforeUnmount(() => {
   window.removeEventListener('keydown', handleKeydown)
+  document.removeEventListener('fullscreenchange', handleBrowserFullscreenChange)
   if (runtimeTimer !== null) window.clearInterval(runtimeTimer)
   if (toastTimer !== null) window.clearTimeout(toastTimer)
 })
+
+watch(
+  () => [
+    videoStore.streamAlive,
+    videoStore.customBlockPacketsReceived,
+    videoStore.h264SeenSps,
+    videoStore.h264SeenPps,
+    videoStore.h264ConsecutiveDecodeErrors,
+    modeStore.mqttConnected,
+  ],
+  () => {
+    const warning = modeStatusWarning()
+    if (warning && warning !== lastRuntimeWarning) {
+      lastRuntimeWarning = warning
+      lastError.value = warning
+      pushMessage(`WARN ${warning}`)
+    }
+    if (!warning && lastRuntimeWarning) {
+      lastRuntimeWarning = ''
+      lastError.value = ''
+    }
+  },
+)
 </script>
 
 <template>
-  <div class="rm-operator-shell">
+  <div class="rm-operator-shell" :class="{ 'competition-fullscreen': isCompetitionFullscreen }">
     <div class="rm-operator-video">
       <VideoCanvas
         :offset-x="crosshairOffsetX"
@@ -225,15 +342,17 @@ onBeforeUnmount(() => {
         :line-width="crosshairWidth"
         :display-scale="displayScale"
         :show-center-dot="showCenterDot"
+        :crosshair-color="visibleCrosshairColor"
       />
     </div>
 
     <RmTopStatusBar :last-error="lastError" :runtime-text="runtimeText" />
-    <RmLeftInfoRail :last-error="lastError" :messages="systemMessages" />
+    <RmLeftInfoRail v-if="!isCompetitionFullscreen" :last-error="lastError" :messages="systemMessages" />
     <RmCrosshairHud :success-message="successMessage" />
-    <div class="right-hud-stack" :class="{ collapsed: rightPanelCollapsed }">
+
+    <div v-if="!isCompetitionFullscreen" class="right-hud-stack" :class="{ collapsed: rightPanelCollapsed }">
       <button class="right-hud-toggle" @click="rightPanelCollapsed = !rightPanelCollapsed">
-        {{ rightPanelCollapsed ? '‹' : '›' }}
+        {{ rightPanelCollapsed ? '<' : '>' }}
       </button>
       <div class="right-hud-content">
         <RmQuickActionPanel
@@ -247,8 +366,56 @@ onBeforeUnmount(() => {
         <RmLinkMonitor />
       </div>
     </div>
+
+    <div v-else class="fullscreen-actions">
+      <RmQuickActionPanel
+        compact
+        :switching="switching"
+        :success-message="successMessage"
+        @hero-lob="quickHeroLob"
+        @normal="quickNormal"
+        @open="openDrawer"
+        @fullscreen="toggleFullscreen"
+      />
+    </div>
+
     <RmBottomShortcutBar />
 
+    <section v-if="helpVisible" class="shortcut-help rm-glass-panel rm-angular">
+      <div>
+        <h3>模式</h3>
+        <p><kbd class="rm-key">H</kbd> 英雄吊射</p>
+        <p><kbd class="rm-key">N</kbd> 普通图传</p>
+      </div>
+      <div>
+        <h3>面板</h3>
+        <p><kbd class="rm-key">P</kbd> 参数</p>
+        <p><kbd class="rm-key">D</kbd> 调试</p>
+        <p><kbd class="rm-key">C</kbd> 通信</p>
+        <p><kbd class="rm-key">Tab</kbd> 帮助</p>
+      </div>
+      <div>
+        <h3>准星</h3>
+        <p><kbd class="rm-key">方向键</kbd> 微调</p>
+        <p><kbd class="rm-key">Shift</kbd> + 方向键 大步长</p>
+        <p><kbd class="rm-key">Ctrl</kbd> + 方向键 小步长</p>
+        <p><kbd class="rm-key">R</kbd> 恢复默认</p>
+        <p><kbd class="rm-key">S</kbd> 保存配置</p>
+      </div>
+      <div>
+        <h3>预设</h3>
+        <p><kbd class="rm-key">1/2/3</kbd> 切换预设</p>
+        <p><kbd class="rm-key">Ctrl</kbd> + 1/2/3 保存预设</p>
+      </div>
+      <div>
+        <h3>全屏</h3>
+        <p><kbd class="rm-key">F11</kbd> 全屏</p>
+        <p><kbd class="rm-key">Esc</kbd> 关闭/退出</p>
+      </div>
+    </section>
+
+    <div v-if="lastError" class="hud-last-error">{{ lastError }}</div>
+    <div class="preset-chip">PRESET {{ uiStore.activePresetId }} / {{ activePresetName }}</div>
 
     <n-drawer
       :show="drawerVisible"
@@ -303,7 +470,7 @@ onBeforeUnmount(() => {
                 英雄吊射 0x0310 / H264
               </n-button>
               <n-button type="primary" :loading="switching === 'normal'" @click="quickNormal">
-                普通图传 UDP / HEVC
+                普通图传 UDP 3334 / HEVC
               </n-button>
             </n-space>
             <n-space>
@@ -391,13 +558,84 @@ onBeforeUnmount(() => {
   background: rgba(8, 12, 18, 0.82);
   color: var(--rm-op-cyan);
   cursor: pointer;
-  font-size: 24px;
+  font-size: 18px;
   line-height: 1;
   box-shadow: 0 0 18px rgba(0, 229, 255, 0.14);
 }
 
 .right-hud-toggle:hover {
   border-color: var(--rm-op-cyan);
+}
+
+.fullscreen-actions {
+  position: absolute;
+  right: 22px;
+  bottom: 58px;
+  z-index: 18;
+}
+
+.shortcut-help {
+  position: absolute;
+  left: 50%;
+  top: 105px;
+  z-index: 30;
+  display: grid;
+  width: min(760px, calc(100vw - 48px));
+  grid-template-columns: repeat(5, minmax(0, 1fr));
+  gap: 16px;
+  padding: 18px;
+  border-color: rgba(0, 229, 255, 0.52);
+  background: rgba(2, 6, 10, 0.86);
+  transform: translateX(-50%);
+}
+
+.shortcut-help h3 {
+  margin: 0 0 10px;
+  color: var(--rm-op-cyan);
+  font-size: 13px;
+}
+
+.shortcut-help p {
+  display: flex;
+  align-items: center;
+  gap: 7px;
+  margin: 7px 0;
+  color: rgba(234, 247, 255, 0.78);
+  font-size: 12px;
+}
+
+.hud-last-error {
+  position: absolute;
+  left: 50%;
+  top: 78px;
+  z-index: 19;
+  max-width: min(620px, calc(100vw - 48px));
+  padding: 6px 12px;
+  border: 1px solid rgba(255, 48, 69, 0.5);
+  border-radius: 5px;
+  background: rgba(26, 6, 8, 0.72);
+  color: var(--rm-op-red);
+  font-size: 12px;
+  transform: translateX(-50%);
+}
+
+.preset-chip {
+  position: absolute;
+  left: 24px;
+  bottom: 18px;
+  z-index: 16;
+  padding: 6px 10px;
+  border: 1px solid rgba(0, 229, 255, 0.28);
+  border-radius: 5px;
+  background: rgba(8, 12, 18, 0.64);
+  color: var(--rm-op-cyan);
+  font-size: 11px;
+  font-weight: 800;
+}
+
+.competition-fullscreen .preset-chip {
+  left: 22px;
+  bottom: 18px;
 }
 
 @media (max-width: 1180px) {
@@ -407,6 +645,10 @@ onBeforeUnmount(() => {
 
   .right-hud-content {
     width: 230px;
+  }
+
+  .shortcut-help {
+    grid-template-columns: repeat(2, minmax(0, 1fr));
   }
 }
 </style>

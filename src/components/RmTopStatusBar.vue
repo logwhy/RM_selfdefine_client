@@ -15,7 +15,7 @@ let timer: number | null = null
 let lastBytes = 0
 
 const modeText = computed(() => (videoStore.currentMode === 'hero_lob' ? 'HERO LOB' : 'NORMAL'))
-const sourceText = computed(() => (videoStore.currentVideoSource === 'custombyteblock_h264' ? '0x0310' : 'UDP'))
+const sourceText = computed(() => (videoStore.currentVideoSource === 'custombyteblock_h264' ? '0x0310' : 'UDP 3334'))
 const deployText = computed(() => {
   if (modeStore.deployModeState === 'active') return '已部署'
   if (modeStore.deployModeState === 'inactive') return '未部署'
@@ -61,7 +61,7 @@ onBeforeUnmount(() => {
       <span>RATE <b>{{ bitrateKbps.toFixed(1) }}</b></span>
       <span>LAT <b>{{ videoStore.lastDecodeCostMs || 0 }}ms</b></span>
       <span>RUN <b>{{ runtimeText }}</b></span>
-      <em>◎ 9000</em>
+      <em>9000</em>
     </div>
 
     <div v-if="lastError" class="top-error">{{ lastError }}</div>

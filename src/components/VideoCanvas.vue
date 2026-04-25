@@ -10,6 +10,7 @@ const props = withDefaults(
     lineWidth: number
     displayScale: number
     showCenterDot: boolean
+    crosshairColor?: string
   }>(),
   {
     offsetX: 0,
@@ -17,6 +18,7 @@ const props = withDefaults(
     lineWidth: 2,
     displayScale: 1,
     showCenterDot: true,
+    crosshairColor: '#19f7ff',
   },
 )
 
@@ -74,8 +76,8 @@ function drawOverlay(ctx: CanvasRenderingContext2D, width: number, height: numbe
   const length = crosshairLength.value
   const gap = crosshairGap.value
 
-  ctx.strokeStyle = '#19f7ff'
-  ctx.shadowColor = 'rgba(25, 247, 255, 0.55)'
+  ctx.strokeStyle = props.crosshairColor
+  ctx.shadowColor = props.crosshairColor
   ctx.shadowBlur = 8
   ctx.lineWidth = props.lineWidth
   ctx.beginPath()

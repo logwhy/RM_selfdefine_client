@@ -1,5 +1,6 @@
 <script setup lang="ts">
 defineProps<{
+  compact?: boolean
   switching: 'hero_lob' | 'normal' | null
   successMessage: string
 }>()
@@ -13,23 +14,23 @@ defineEmits<{
 </script>
 
 <template>
-  <aside class="rm-quick-panel rm-glass-panel rm-angular">
+  <aside class="rm-quick-panel rm-glass-panel rm-angular" :class="{ compact }">
     <button class="primary-lob" :disabled="switching !== null" @click="$emit('heroLob')">
       <span>{{ switching === 'hero_lob' ? '切换中...' : '一键英雄吊射' }}</span>
       <b>0x0310 / H264</b>
     </button>
     <button class="normal" :disabled="switching !== null" @click="$emit('normal')">
       <span>{{ switching === 'normal' ? '切换中...' : '普通图传' }}</span>
-      <b>UDP / HEVC</b>
+      <b>UDP 3334 / HEVC</b>
     </button>
-    <div class="tool-grid">
+    <div v-if="!compact" class="tool-grid">
       <button @click="$emit('open', 'params')">参数</button>
       <button @click="$emit('open', 'debug')">调试</button>
       <button @click="$emit('open', 'comm')">通信</button>
       <button @click="$emit('open', 'mode')">模式</button>
       <button @click="$emit('fullscreen')">全屏</button>
     </div>
-    <div v-if="successMessage" class="switch-ok">{{ successMessage }}</div>
+    <div v-if="successMessage && !compact" class="switch-ok">{{ successMessage }}</div>
   </aside>
 </template>
 
@@ -42,6 +43,12 @@ defineEmits<{
   padding: 14px;
   border-color: rgba(138, 77, 255, 0.46);
   box-shadow: 0 0 28px rgba(138, 77, 255, 0.18), inset 0 0 18px rgba(138, 77, 255, 0.08);
+}
+
+.rm-quick-panel.compact {
+  width: auto;
+  flex-direction: row;
+  padding: 8px;
 }
 
 button {
@@ -69,6 +76,13 @@ button:disabled {
   border-radius: 7px;
 }
 
+.compact .primary-lob,
+.compact .normal {
+  min-height: 42px;
+  min-width: 136px;
+  padding: 7px 10px;
+}
+
 .primary-lob {
   border-color: rgba(255, 201, 58, 0.65);
   background:
@@ -86,6 +100,11 @@ button:disabled {
 .normal span {
   font-size: 15px;
   font-weight: 900;
+}
+
+.compact .primary-lob span,
+.compact .normal span {
+  font-size: 13px;
 }
 
 .primary-lob b {
