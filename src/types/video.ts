@@ -23,8 +23,34 @@ export interface VideoStatsPayload {
   customBlockBytesReceived: number
   customBlockReadyFrames: number
   customBlockInvalidPackets: number
+  customBlockPacketsPerSecond: number
+  customBlockBytesPerSecond: number
+  customBlockBitrateKbps: number
+  customBlockDroppedBlocks: number
+  customBlockBufferedBytes: number
+  customBlockLastReceiveAt: string | null
+  customBlockNoDataDurationMs: number | null
   customBlockParserMode: CustomBlockParserMode
   customBlockMockActive: boolean
+  h264SeenSps: boolean
+  h264SeenPps: boolean
+  h264SeenIdr: boolean
+  h264LastNalType: number | null
+  h264BufferedBytes: number
+  h264NalUnitsParsed: number
+  h264FramesSubmittedToDecoder: number
+  h264FramesDecoded: number
+  h264FramesDropped: number
+  h264DecoderErrors: number
+  h264ConsecutiveDecodeErrors: number
+  droppedOldFrames: number
+  droppedByBackpressure: number
+  decodeInputQueueLen: number
+  frameRenderQueueLen: number
+  avgDecodeCostMs: number
+  maxDecodeCostMs: number
+  lastRenderCostMs: number
+  avgEndToEndLatencyMs: number
 }
 
 export interface VideoCommandResult {

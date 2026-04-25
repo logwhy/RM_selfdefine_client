@@ -11,7 +11,7 @@ use serde::Serialize;
 use std::sync::Arc;
 use tauri::Emitter;
 use tokio::sync::{mpsc, oneshot, Mutex};
-use tokio::time::{sleep, Duration};
+use tokio::time::{sleep, Duration, MissedTickBehavior};
 
 const DEPLOY_MODE_TOPIC: &str = "DeployModeStatusSync";
 const CUSTOM_BYTE_BLOCK_TOPIC: &str = "CustomByteBlock";
@@ -74,11 +74,22 @@ pub fn spawn_mqtt_loop(
 
     let mut subscribed = false;
     let mut connected = false;
+    let mut stats_ticker = tokio::time::interval(Duration::from_millis(500));
+    stats_ticker.set_missed_tick_behavior(MissedTickBehavior::Delay);
 
     loop {
       tokio::select! {
         _ = &mut stop_rx => {
           break;
+        }
+        _ = stats_ticker.tick() => {
+          emit_video_stats(
+            &app,
+            &frame_hub,
+            video_config.clone(),
+            custom_block_stats.clone(),
+          )
+          .await;
         }
         event = eventloop.poll() => {
           match event {
@@ -224,8 +235,34 @@ async fn emit_video_stats(
       custom_block_bytes_received: custom_stats.custom_block_bytes_received,
       custom_block_ready_frames: custom_stats.custom_block_ready_frames,
       custom_block_invalid_packets: custom_stats.custom_block_invalid_packets,
+      custom_block_packets_per_second: custom_stats.custom_block_packets_per_second,
+      custom_block_bytes_per_second: custom_stats.custom_block_bytes_per_second,
+      custom_block_bitrate_kbps: custom_stats.custom_block_bitrate_kbps,
+      custom_block_dropped_blocks: custom_stats.custom_block_dropped_blocks,
+      custom_block_buffered_bytes: custom_stats.custom_block_buffered_bytes,
+      custom_block_last_receive_at: custom_stats.custom_block_last_receive_at,
+      custom_block_no_data_duration_ms: custom_stats.custom_block_no_data_duration_ms,
       custom_block_parser_mode: custom_stats.custom_block_parser_mode,
       custom_block_mock_active: custom_stats.custom_block_mock_active,
+      h264_seen_sps: custom_stats.h264_parser_stats.h264_seen_sps,
+      h264_seen_pps: custom_stats.h264_parser_stats.h264_seen_pps,
+      h264_seen_idr: custom_stats.h264_parser_stats.h264_seen_idr,
+      h264_last_nal_type: custom_stats.h264_parser_stats.h264_last_nal_type,
+      h264_buffered_bytes: custom_stats.h264_parser_stats.h264_buffered_bytes,
+      h264_nal_units_parsed: custom_stats.h264_parser_stats.h264_nal_units_parsed,
+      h264_frames_submitted_to_decoder: custom_stats.h264_parser_stats.h264_frames_submitted_to_decoder,
+      h264_frames_decoded: decoder_stats.frames_decoded,
+      h264_frames_dropped: custom_stats.h264_parser_stats.h264_frames_dropped,
+      h264_decoder_errors: decoder_stats.decoder_errors,
+      h264_consecutive_decode_errors: decoder_stats.consecutive_decode_errors,
+      dropped_old_frames: custom_stats.h264_parser_stats.h264_frames_dropped,
+      dropped_by_backpressure: custom_stats.custom_block_dropped_blocks,
+      decode_input_queue_len: 0,
+      frame_render_queue_len: 0,
+      avg_decode_cost_ms: decoder_stats.avg_decode_cost_ms,
+      max_decode_cost_ms: decoder_stats.max_decode_cost_ms,
+      last_render_cost_ms: 0.0,
+      avg_end_to_end_latency_ms: 0.0,
     },
   ) {
     log::error!("emit video_stats for CustomByteBlock failed: {error:?}");

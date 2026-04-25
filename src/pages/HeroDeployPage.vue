@@ -68,6 +68,7 @@ const lastError = ref('')
 const successMessage = ref('')
 const runtimeSeconds = ref(0)
 const systemMessages = ref<string[]>([])
+const rightPanelCollapsed = ref(false)
 
 let runtimeTimer: number | null = null
 let toastTimer: number | null = null
@@ -230,15 +231,22 @@ onBeforeUnmount(() => {
     <RmTopStatusBar :last-error="lastError" :runtime-text="runtimeText" />
     <RmLeftInfoRail :last-error="lastError" :messages="systemMessages" />
     <RmCrosshairHud :success-message="successMessage" />
-    <RmQuickActionPanel
-      :switching="switching"
-      :success-message="successMessage"
-      @hero-lob="quickHeroLob"
-      @normal="quickNormal"
-      @open="openDrawer"
-      @fullscreen="toggleFullscreen"
-    />
-    <RmLinkMonitor />
+    <div class="right-hud-stack" :class="{ collapsed: rightPanelCollapsed }">
+      <button class="right-hud-toggle" @click="rightPanelCollapsed = !rightPanelCollapsed">
+        {{ rightPanelCollapsed ? '‹' : '›' }}
+      </button>
+      <div class="right-hud-content">
+        <RmQuickActionPanel
+          :switching="switching"
+          :success-message="successMessage"
+          @hero-lob="quickHeroLob"
+          @normal="quickNormal"
+          @open="openDrawer"
+          @fullscreen="toggleFullscreen"
+        />
+        <RmLinkMonitor />
+      </div>
+    </div>
     <RmBottomShortcutBar />
 
 
@@ -349,4 +357,56 @@ onBeforeUnmount(() => {
 </template>
 
 <style scoped>
+.right-hud-stack {
+  position: absolute;
+  right: 24px;
+  top: 50%;
+  z-index: 14;
+  display: flex;
+  align-items: center;
+  gap: 8px;
+  transform: translateY(-50%);
+  transition: transform 180ms ease;
+}
+
+.right-hud-stack.collapsed {
+  transform: translate(calc(100% - 18px), -50%);
+}
+
+.right-hud-content {
+  display: flex;
+  width: 286px;
+  max-height: calc(100vh - 168px);
+  flex-direction: column;
+  gap: 12px;
+  overflow: auto;
+  padding-right: 2px;
+}
+
+.right-hud-toggle {
+  width: 26px;
+  height: 76px;
+  border: 1px solid rgba(0, 229, 255, 0.4);
+  border-radius: 8px 0 0 8px;
+  background: rgba(8, 12, 18, 0.82);
+  color: var(--rm-op-cyan);
+  cursor: pointer;
+  font-size: 24px;
+  line-height: 1;
+  box-shadow: 0 0 18px rgba(0, 229, 255, 0.14);
+}
+
+.right-hud-toggle:hover {
+  border-color: var(--rm-op-cyan);
+}
+
+@media (max-width: 1180px) {
+  .right-hud-stack {
+    right: 14px;
+  }
+
+  .right-hud-content {
+    width: 230px;
+  }
+}
 </style>

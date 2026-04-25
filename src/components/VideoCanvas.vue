@@ -24,6 +24,8 @@ const canvasRef = ref<HTMLCanvasElement | null>(null)
 const videoStore = useVideoStore()
 const hasFrame = ref(false)
 let pollingTimer: number | null = null
+let rafId: number | null = null
+let renderSamples = 0
 
 const crosshairLength = computed(() => 24 * props.displayScale)
 const crosshairGap = computed(() => 8 * props.displayScale)
@@ -96,7 +98,8 @@ function drawOverlay(ctx: CanvasRenderingContext2D, width: number, height: numbe
   }
 }
 
-async function pollLatestFrame() {
+async function renderLatestFrame() {
+  const renderStart = performance.now()
   try {
     const frame = await getLatestFrame(videoStore.latestFrameVersion || undefined)
     if (frame) {
@@ -115,6 +118,15 @@ async function pollLatestFrame() {
 
       hasFrame.value = true
       videoStore.latestFrameVersion = frame.version
+      const renderCost = performance.now() - renderStart
+      renderSamples += 1
+      videoStore.lastRenderCostMs = Number(renderCost.toFixed(2))
+      videoStore.avgEndToEndLatencyMs = Number(
+        (((videoStore.avgEndToEndLatencyMs * (renderSamples - 1)) +
+          (Date.now() - Number(frame.producedAtMs))) /
+          renderSamples
+        ).toFixed(2),
+      )
       return
     }
   } catch (error) {
@@ -126,11 +138,17 @@ async function pollLatestFrame() {
   }
 }
 
+function pollLatestFrame() {
+  if (rafId !== null) return
+  rafId = window.requestAnimationFrame(() => {
+    rafId = null
+    void renderLatestFrame()
+  })
+}
+
 function startPolling() {
   if (pollingTimer !== null) window.clearInterval(pollingTimer)
-  pollingTimer = window.setInterval(() => {
-    void pollLatestFrame()
-  }, 33)
+  pollingTimer = window.setInterval(pollLatestFrame, 33)
 }
 
 onMounted(() => {
@@ -141,6 +159,7 @@ onMounted(() => {
 
 onBeforeUnmount(() => {
   window.removeEventListener('resize', drawPlaceholder)
+  if (rafId !== null) window.cancelAnimationFrame(rafId)
   if (pollingTimer !== null) {
     window.clearInterval(pollingTimer)
     pollingTimer = null
@@ -149,16 +168,14 @@ onBeforeUnmount(() => {
 
 watch(
   () => [props.offsetX, props.offsetY, props.lineWidth, props.displayScale, props.showCenterDot],
-  () => {
-    void pollLatestFrame()
-  },
+  pollLatestFrame,
 )
 
 watch(
   () => videoStore.streamAlive,
   () => {
     if (!videoStore.streamAlive) hasFrame.value = false
-    void pollLatestFrame()
+    pollLatestFrame()
   },
 )
 </script>

@@ -57,7 +57,7 @@ fn spawn_real_decoder(
   frame_hub: Arc<LatestFrameHub>,
   codec_mode: CodecMode,
 ) -> (DecoderRuntime, mpsc::Sender<Vec<u8>>) {
-  let (tx, mut rx) = mpsc::channel::<Vec<u8>>(8);
+  let (tx, mut rx) = mpsc::channel::<Vec<u8>>(1);
   let (stop_tx, mut stop_rx) = oneshot::channel::<()>();
 
   let join_handle = tokio::spawn(async move {
@@ -65,7 +65,7 @@ fn spawn_real_decoder(
     let stop_flag = Arc::new(AtomicBool::new(false));
     let stop_flag_for_decoder = Arc::clone(&stop_flag);
     let frame_hub_for_decoder = Arc::clone(&frame_hub);
-    let (packet_tx, packet_rx) = std_mpsc::channel::<Vec<u8>>();
+    let (packet_tx, packet_rx) = std_mpsc::sync_channel::<Vec<u8>>(1);
 
     let decoder_worker = tokio::task::spawn_blocking(move || {
       run_real_decoder_loop(packet_rx, stop_flag_for_decoder, frame_hub_for_decoder, rt_handle, codec_mode);
@@ -82,9 +82,17 @@ fn spawn_real_decoder(
             stop_flag.store(true, Ordering::Relaxed);
             break;
           };
-          if packet_tx.send(data).is_err() {
-            stop_flag.store(true, Ordering::Relaxed);
-            break;
+          let mut latest = data;
+          while let Ok(newer) = rx.try_recv() {
+            latest = newer;
+          }
+          match packet_tx.try_send(latest) {
+            Ok(()) => {}
+            Err(std_mpsc::TrySendError::Full(_)) => {}
+            Err(std_mpsc::TrySendError::Disconnected(_)) => {
+              stop_flag.store(true, Ordering::Relaxed);
+              break;
+            }
           }
         }
       }
@@ -235,7 +243,7 @@ fn spawn_stub_decoder(
   frame_hub: Arc<LatestFrameHub>,
   codec_mode: CodecMode,
 ) -> (DecoderRuntime, mpsc::Sender<Vec<u8>>) {
-  let (tx, mut rx) = mpsc::channel::<Vec<u8>>(8);
+  let (tx, mut rx) = mpsc::channel::<Vec<u8>>(1);
   let (stop_tx, mut stop_rx) = oneshot::channel::<()>();
 
   let join_handle = tokio::spawn(async move {

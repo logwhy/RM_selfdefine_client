@@ -17,8 +17,13 @@ pub struct FrameSnapshot {
 pub struct DecoderStats {
   pub decoder_reset_count: u64,
   pub last_decode_cost_ms: f64,
+  pub avg_decode_cost_ms: f64,
+  pub max_decode_cost_ms: f64,
   pub current_decoder_name: String,
   pub decoder_init_success: bool,
+  pub frames_decoded: u64,
+  pub decoder_errors: u64,
+  pub consecutive_decode_errors: u64,
 }
 
 #[derive(Debug, Clone, Default)]
@@ -53,6 +58,12 @@ impl LatestFrameHub {
 
     let mut stats = self.decoder_stats.write().await;
     stats.last_decode_cost_ms = decode_cost_ms;
+    stats.frames_decoded += 1;
+    let frames = stats.frames_decoded as f64;
+    stats.avg_decode_cost_ms =
+      ((stats.avg_decode_cost_ms * (frames - 1.0)) + decode_cost_ms) / frames.max(1.0);
+    stats.max_decode_cost_ms = stats.max_decode_cost_ms.max(decode_cost_ms);
+    stats.consecutive_decode_errors = 0;
   }
 
   pub async fn snapshot_if_newer(&self, since_version: Option<u64>) -> Option<FrameSnapshot> {
@@ -79,7 +90,16 @@ impl LatestFrameHub {
   pub async fn mark_decoder_reset(&self) {
     let mut stats = self.decoder_stats.write().await;
     stats.decoder_reset_count += 1;
+    stats.decoder_errors += 1;
+    stats.consecutive_decode_errors += 1;
     stats.decoder_init_success = false;
+  }
+
+  #[allow(dead_code)]
+  pub async fn mark_decoder_error(&self) {
+    let mut stats = self.decoder_stats.write().await;
+    stats.decoder_errors += 1;
+    stats.consecutive_decode_errors += 1;
   }
 
   pub async fn set_decoder_status(&self, current_decoder_name: String, decoder_init_success: bool) {

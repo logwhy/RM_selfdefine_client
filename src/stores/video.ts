@@ -40,7 +40,33 @@ export const useVideoStore = defineStore('video', () => {
   const customBlockBytesReceived = ref(0)
   const customBlockReadyFrames = ref(0)
   const customBlockInvalidPackets = ref(0)
+  const customBlockPacketsPerSecond = ref(0)
+  const customBlockBytesPerSecond = ref(0)
+  const customBlockBitrateKbps = ref(0)
+  const customBlockDroppedBlocks = ref(0)
+  const customBlockBufferedBytes = ref(0)
+  const customBlockLastReceiveAt = ref<string | null>(null)
+  const customBlockNoDataDurationMs = ref<number | null>(null)
   const customBlockMockActive = ref(false)
+  const h264SeenSps = ref(false)
+  const h264SeenPps = ref(false)
+  const h264SeenIdr = ref(false)
+  const h264LastNalType = ref<number | null>(null)
+  const h264BufferedBytes = ref(0)
+  const h264NalUnitsParsed = ref(0)
+  const h264FramesSubmittedToDecoder = ref(0)
+  const h264FramesDecoded = ref(0)
+  const h264FramesDropped = ref(0)
+  const h264DecoderErrors = ref(0)
+  const h264ConsecutiveDecodeErrors = ref(0)
+  const droppedOldFrames = ref(0)
+  const droppedByBackpressure = ref(0)
+  const decodeInputQueueLen = ref(0)
+  const frameRenderQueueLen = ref(0)
+  const avgDecodeCostMs = ref(0)
+  const maxDecodeCostMs = ref(0)
+  const lastRenderCostMs = ref(0)
+  const avgEndToEndLatencyMs = ref(0)
   const latestFrameVersion = ref(0)
 
   function applyVideoStats(payload: VideoStatsPayload) {
@@ -70,7 +96,33 @@ export const useVideoStore = defineStore('video', () => {
     customBlockBytesReceived.value = payload.customBlockBytesReceived
     customBlockReadyFrames.value = payload.customBlockReadyFrames
     customBlockInvalidPackets.value = payload.customBlockInvalidPackets
+    customBlockPacketsPerSecond.value = Number(payload.customBlockPacketsPerSecond.toFixed(2))
+    customBlockBytesPerSecond.value = Number(payload.customBlockBytesPerSecond.toFixed(2))
+    customBlockBitrateKbps.value = Number(payload.customBlockBitrateKbps.toFixed(2))
+    customBlockDroppedBlocks.value = payload.customBlockDroppedBlocks
+    customBlockBufferedBytes.value = payload.customBlockBufferedBytes
+    customBlockLastReceiveAt.value = payload.customBlockLastReceiveAt
+    customBlockNoDataDurationMs.value = payload.customBlockNoDataDurationMs
     customBlockMockActive.value = payload.customBlockMockActive
+    h264SeenSps.value = payload.h264SeenSps
+    h264SeenPps.value = payload.h264SeenPps
+    h264SeenIdr.value = payload.h264SeenIdr
+    h264LastNalType.value = payload.h264LastNalType
+    h264BufferedBytes.value = payload.h264BufferedBytes
+    h264NalUnitsParsed.value = payload.h264NalUnitsParsed
+    h264FramesSubmittedToDecoder.value = payload.h264FramesSubmittedToDecoder
+    h264FramesDecoded.value = payload.h264FramesDecoded
+    h264FramesDropped.value = payload.h264FramesDropped
+    h264DecoderErrors.value = payload.h264DecoderErrors
+    h264ConsecutiveDecodeErrors.value = payload.h264ConsecutiveDecodeErrors
+    droppedOldFrames.value = payload.droppedOldFrames
+    droppedByBackpressure.value = payload.droppedByBackpressure
+    decodeInputQueueLen.value = payload.decodeInputQueueLen
+    frameRenderQueueLen.value = payload.frameRenderQueueLen
+    avgDecodeCostMs.value = Number(payload.avgDecodeCostMs.toFixed(2))
+    maxDecodeCostMs.value = Number(payload.maxDecodeCostMs.toFixed(2))
+    lastRenderCostMs.value = Number(payload.lastRenderCostMs.toFixed(2))
+    avgEndToEndLatencyMs.value = Number(payload.avgEndToEndLatencyMs.toFixed(2))
     frameVersion.value += 1
   }
 
@@ -141,7 +193,33 @@ export const useVideoStore = defineStore('video', () => {
     customBlockBytesReceived,
     customBlockReadyFrames,
     customBlockInvalidPackets,
+    customBlockPacketsPerSecond,
+    customBlockBytesPerSecond,
+    customBlockBitrateKbps,
+    customBlockDroppedBlocks,
+    customBlockBufferedBytes,
+    customBlockLastReceiveAt,
+    customBlockNoDataDurationMs,
     customBlockMockActive,
+    h264SeenSps,
+    h264SeenPps,
+    h264SeenIdr,
+    h264LastNalType,
+    h264BufferedBytes,
+    h264NalUnitsParsed,
+    h264FramesSubmittedToDecoder,
+    h264FramesDecoded,
+    h264FramesDropped,
+    h264DecoderErrors,
+    h264ConsecutiveDecodeErrors,
+    droppedOldFrames,
+    droppedByBackpressure,
+    decodeInputQueueLen,
+    frameRenderQueueLen,
+    avgDecodeCostMs,
+    maxDecodeCostMs,
+    lastRenderCostMs,
+    avgEndToEndLatencyMs,
     latestFrameVersion,
     applyVideoStats,
     applyPipelineConfig,

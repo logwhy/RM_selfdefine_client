@@ -35,16 +35,11 @@ defineEmits<{
 
 <style scoped>
 .rm-quick-panel {
-  position: absolute;
-  right: 24px;
-  top: 50%;
-  z-index: 14;
   width: 246px;
   display: flex;
   flex-direction: column;
   gap: 10px;
   padding: 14px;
-  transform: translateY(-50%);
   border-color: rgba(138, 77, 255, 0.46);
   box-shadow: 0 0 28px rgba(138, 77, 255, 0.18), inset 0 0 18px rgba(138, 77, 255, 0.08);
 }
@@ -124,12 +119,5 @@ button:disabled {
   color: var(--rm-op-green);
   font-size: 12px;
   text-align: center;
-}
-
-@media (max-width: 1180px) {
-  .rm-quick-panel {
-    right: 16px;
-    width: 210px;
-  }
 }
 </style>

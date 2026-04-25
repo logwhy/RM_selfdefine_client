@@ -1,4 +1,6 @@
 use crate::video::reassembler::FrameReassembler;
+use serde::Serialize;
+use std::collections::VecDeque;
 use std::time::Duration;
 
 pub enum CustomBlockOutput {
@@ -7,12 +9,31 @@ pub enum CustomBlockOutput {
   InvalidPacket,
 }
 
+#[derive(Debug, Clone, Default, Serialize)]
+#[serde(rename_all = "camelCase")]
+pub struct H264ParserStats {
+  pub h264_seen_sps: bool,
+  pub h264_seen_pps: bool,
+  pub h264_seen_idr: bool,
+  pub h264_last_nal_type: Option<u8>,
+  pub h264_buffered_bytes: usize,
+  pub h264_nal_units_parsed: u64,
+  pub h264_frames_submitted_to_decoder: u64,
+  pub h264_frames_dropped: u64,
+}
+
 pub struct H264Reassembler {
   raw_buffer: Vec<u8>,
+  ready_outputs: VecDeque<Vec<u8>>,
   current_access_unit: Vec<Vec<u8>>,
   current_has_vcl: bool,
   sps: Option<Vec<u8>>,
   pps: Option<Vec<u8>>,
+  seen_idr: bool,
+  last_nal_type: Option<u8>,
+  nal_units_parsed: u64,
+  frames_submitted_to_decoder: u64,
+  frames_dropped: u64,
   frame_reassembler: FrameReassembler,
 }
 
@@ -20,10 +41,16 @@ impl H264Reassembler {
   pub fn new() -> Self {
     Self {
       raw_buffer: Vec::with_capacity(4096),
+      ready_outputs: VecDeque::with_capacity(2),
       current_access_unit: Vec::new(),
       current_has_vcl: false,
       sps: None,
       pps: None,
+      seen_idr: false,
+      last_nal_type: None,
+      nal_units_parsed: 0,
+      frames_submitted_to_decoder: 0,
+      frames_dropped: 0,
       frame_reassembler: FrameReassembler::new(Duration::from_millis(1200)),
     }
   }
@@ -33,8 +60,9 @@ impl H264Reassembler {
       return CustomBlockOutput::InvalidPacket;
     }
     self.raw_buffer.extend_from_slice(data);
-    if self.raw_buffer.len() > 256 * 1024 {
+    if self.raw_buffer.len() > 64 * 1024 {
       self.raw_buffer.clear();
+      self.frames_dropped += 1;
       return CustomBlockOutput::InvalidPacket;
     }
 
@@ -50,12 +78,16 @@ impl H264Reassembler {
       self.raw_buffer.drain(0..first_start);
     }
 
-    let Some(next_start) = find_start_code(&self.raw_buffer, 4) else {
-      return CustomBlockOutput::Waiting;
-    };
+    while let Some(next_start) = find_start_code(&self.raw_buffer, 4) {
+      let nal = self.raw_buffer.drain(0..next_start).collect::<Vec<u8>>();
+      match self.push_h264_nal(nal) {
+        CustomBlockOutput::Bytes(bytes) => self.push_ready_output(bytes),
+        CustomBlockOutput::InvalidPacket => return CustomBlockOutput::InvalidPacket,
+        CustomBlockOutput::Waiting => {}
+      }
+    }
 
-    let nal = self.raw_buffer.drain(0..next_start).collect::<Vec<u8>>();
-    self.push_h264_nal(nal)
+    self.pop_ready_output()
   }
 
   pub fn push_packetized_frame(&mut self, data: &[u8]) -> CustomBlockOutput {
@@ -72,8 +104,42 @@ impl H264Reassembler {
       .frame_reassembler
       .push_fragment(frame_id, fragment_index, frame_total_bytes, payload)
     {
-      Some(frame) => CustomBlockOutput::Bytes(frame),
+      Some(frame) => {
+        self.frames_submitted_to_decoder += 1;
+        CustomBlockOutput::Bytes(frame)
+      }
       None => CustomBlockOutput::Waiting,
+    }
+  }
+
+  pub fn stats(&self) -> H264ParserStats {
+    H264ParserStats {
+      h264_seen_sps: self.sps.is_some(),
+      h264_seen_pps: self.pps.is_some(),
+      h264_seen_idr: self.seen_idr,
+      h264_last_nal_type: self.last_nal_type,
+      h264_buffered_bytes: self.raw_buffer.len(),
+      h264_nal_units_parsed: self.nal_units_parsed,
+      h264_frames_submitted_to_decoder: self.frames_submitted_to_decoder,
+      h264_frames_dropped: self.frames_dropped,
+    }
+  }
+
+  fn push_ready_output(&mut self, bytes: Vec<u8>) {
+    if self.ready_outputs.len() >= 1 {
+      self.ready_outputs.pop_front();
+      self.frames_dropped += 1;
+    }
+    self.ready_outputs.push_back(bytes);
+  }
+
+  fn pop_ready_output(&mut self) -> CustomBlockOutput {
+    if let Some(bytes) = self.ready_outputs.pop_back() {
+      self.ready_outputs.clear();
+      self.frames_submitted_to_decoder += 1;
+      CustomBlockOutput::Bytes(bytes)
+    } else {
+      CustomBlockOutput::Waiting
     }
   }
 
@@ -81,6 +147,8 @@ impl H264Reassembler {
     let Some(nal_type) = h264_nal_type(&nal) else {
       return CustomBlockOutput::InvalidPacket;
     };
+    self.last_nal_type = Some(nal_type);
+    self.nal_units_parsed += 1;
 
     match nal_type {
       7 => {
@@ -104,6 +172,9 @@ impl H264Reassembler {
         }
       }
       1 | 5 => {
+        if nal_type == 5 {
+          self.seen_idr = true;
+        }
         if self.current_has_vcl && h264_first_mb_in_slice_is_zero(&nal) {
           let output = self.finish_access_unit();
           self.begin_access_unit_with_cached_parameter_sets();
