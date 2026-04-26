@@ -100,6 +100,23 @@ function drawOverlay(ctx: CanvasRenderingContext2D, width: number, height: numbe
   }
 }
 
+function fitRect(sourceWidth: number, sourceHeight: number, targetWidth: number, targetHeight: number) {
+  if (sourceWidth <= 0 || sourceHeight <= 0 || targetWidth <= 0 || targetHeight <= 0) {
+    return { x: 0, y: 0, width: targetWidth, height: targetHeight }
+  }
+
+  const scale = Math.min(targetWidth / sourceWidth, targetHeight / sourceHeight)
+  const width = sourceWidth * scale
+  const height = sourceHeight * scale
+
+  return {
+    x: (targetWidth - width) / 2,
+    y: (targetHeight - height) / 2,
+    width,
+    height,
+  }
+}
+
 async function renderLatestFrame() {
   const renderStart = performance.now()
   try {
@@ -113,8 +130,14 @@ async function renderLatestFrame() {
       const imageData = new ImageData(rgba, frame.width, frame.height)
       const bitmap = await createImageBitmap(imageData)
 
+      const fitted = fitRect(frame.width, frame.height, width, height)
+
       ctx.clearRect(0, 0, width, height)
-      ctx.drawImage(bitmap, 0, 0, width, height)
+      ctx.fillStyle = '#02070d'
+      ctx.fillRect(0, 0, width, height)
+      ctx.imageSmoothingEnabled = true
+      ctx.imageSmoothingQuality = 'high'
+      ctx.drawImage(bitmap, fitted.x, fitted.y, fitted.width, fitted.height)
       bitmap.close()
       drawOverlay(ctx, width, height)
 
