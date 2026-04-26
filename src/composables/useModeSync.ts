@@ -1,9 +1,9 @@
 import { onBeforeUnmount, onMounted, ref } from 'vue'
 import { useModeStore } from '../stores/mode'
-import { connectMqtt, disconnectMqtt, emitMockModeSync, subscribeModeSync } from '../services/mqttBridge'
+import { connectMqtt, disconnectMqtt, emitMockModeSync, subscribeModeSync, subscribeRefereeMessages } from '../services/mqttBridge'
 
-const DEFAULT_HOST = '127.0.0.1'
-const DEFAULT_PORT = 1883
+const DEFAULT_HOST = '192.168.12.1'
+const DEFAULT_PORT = 3333
 
 export function useModeSync() {
   const modeStore = useModeStore()
@@ -12,10 +12,14 @@ export function useModeSync() {
   const commandMessage = ref('')
 
   let unlisten: (() => void) | null = null
+  let unlistenReferee: (() => void) | null = null
 
   onMounted(async () => {
     unlisten = await subscribeModeSync((payload) => {
       modeStore.applyModeSync(payload)
+    })
+    unlistenReferee = await subscribeRefereeMessages((payload) => {
+      modeStore.applyRefereeMessage(payload)
     })
   })
 
@@ -23,6 +27,10 @@ export function useModeSync() {
     if (unlisten) {
       unlisten()
       unlisten = null
+    }
+    if (unlistenReferee) {
+      unlistenReferee()
+      unlistenReferee = null
     }
   })
 

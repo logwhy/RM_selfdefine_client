@@ -17,6 +17,9 @@ import {
 } from 'naive-ui'
 import CrosshairPanel from '../components/CrosshairPanel.vue'
 import DebugPanel from '../components/DebugPanel.vue'
+import HudEditorOverlay from '../components/HudEditorOverlay.vue'
+import HudEditorPanel from '../components/HudEditorPanel.vue'
+import InputDiagnosticsPanel from '../components/InputDiagnosticsPanel.vue'
 import RmBottomShortcutBar from '../components/RmBottomShortcutBar.vue'
 import RmCrosshairHud from '../components/RmCrosshairHud.vue'
 import RmHudPanel from '../components/RmHudPanel.vue'
@@ -26,13 +29,16 @@ import RmQuickActionPanel from '../components/RmQuickActionPanel.vue'
 import RmTopStatusBar from '../components/RmTopStatusBar.vue'
 import VideoCanvas from '../components/VideoCanvas.vue'
 import { useModeSync } from '../composables/useModeSync'
+import { useLowLatencyInput } from '../composables/useLowLatencyInput'
 import { useUiPersistence } from '../composables/useUiPersistence'
 import { useVideoStream } from '../composables/useVideoStream'
 import { useModeStore } from '../stores/mode'
+import { useHudEditorStore } from '../stores/hudEditor'
+import { useInputControlStore } from '../stores/inputControl'
 import { useUiStore } from '../stores/ui'
 import { useVideoStore } from '../stores/video'
 
-type DrawerKey = 'params' | 'debug' | 'comm' | 'mode' | null
+type DrawerKey = 'params' | 'debug' | 'comm' | 'mode' | 'hud' | 'input' | null
 type SwitchingMode = 'hero_lob' | 'normal' | null
 
 useUiPersistence()
@@ -48,6 +54,10 @@ const {
 
 const modeStore = useModeStore()
 const videoStore = useVideoStore()
+const hudStore = useHudEditorStore()
+const inputStore = useInputControlStore()
+const shellRef = ref<HTMLElement | null>(null)
+const { enterFpsMode, exitFpsMode } = useLowLatencyInput(() => shellRef.value)
 const { host, port, commandMessage, handleConnect, handleDisconnect, handleMockToggle } = useModeSync()
 const {
   port: videoPort,
@@ -242,8 +252,14 @@ function handlePresetShortcut(id: 1 | 2 | 3, savePreset: boolean) {
 
 function handleKeydown(event: KeyboardEvent) {
   if (isTypingTarget(event.target)) return
-  if (['Tab', 'F11', 'Escape', 'ArrowUp', 'ArrowDown', 'ArrowLeft', 'ArrowRight'].includes(event.key)) {
+  if (inputStore.fpsMode && !['Escape', 'Enter', 'Tab'].includes(event.key)) return
+  if (['Tab', 'F11', 'Escape', 'Enter', 'Delete', 'ArrowUp', 'ArrowDown', 'ArrowLeft', 'ArrowRight'].includes(event.key)) {
     event.preventDefault()
+  }
+  if (event.key === 'Enter') {
+    if (inputStore.fpsMode) void exitFpsMode()
+    else void enterFpsMode()
+    return
   }
   if (event.key === 'Tab') {
     helpVisible.value = !helpVisible.value
@@ -255,6 +271,10 @@ function handleKeydown(event: KeyboardEvent) {
     return
   }
   if (event.key === 'Escape') {
+    if (inputStore.fpsMode) {
+      void exitFpsMode()
+      return
+    }
     if (helpVisible.value) {
       helpVisible.value = false
       return
@@ -268,6 +288,18 @@ function handleKeydown(event: KeyboardEvent) {
   }
   if (event.key.startsWith('Arrow')) {
     adjustCrosshair(event)
+    return
+  }
+  if (event.key === 'Delete') {
+    hudStore.deleteSelected()
+    return
+  }
+  if (event.ctrlKey && event.key.toLowerCase() === 'z') {
+    hudStore.undo()
+    return
+  }
+  if (event.ctrlKey && event.key.toLowerCase() === 'y') {
+    hudStore.redo()
     return
   }
   if (['1', '2', '3'].includes(event.key)) {
@@ -285,6 +317,17 @@ function handleKeydown(event: KeyboardEvent) {
     openDrawer('debug')
   } else if (key === 'c') {
     openDrawer('comm')
+  } else if (key === 'u') {
+    hudStore.editMode = !hudStore.editMode
+    if (hudStore.editMode) {
+      hudStore.locked = false
+      openDrawer('hud')
+    } else {
+      handleDrawerVisible(false)
+    }
+    showToast(hudStore.editMode ? 'HUD 编辑已开启' : 'HUD 编辑已关闭', 'info')
+  } else if (key === 'i') {
+    openDrawer('input')
   } else if (key === 'r') {
     uiStore.resetDefaults()
     showToast('准星已恢复默认', 'info')
@@ -334,7 +377,11 @@ watch(
 </script>
 
 <template>
-  <div class="rm-operator-shell" :class="{ 'competition-fullscreen': isCompetitionFullscreen }">
+  <div
+    ref="shellRef"
+    class="rm-operator-shell"
+    :class="{ 'competition-fullscreen': isCompetitionFullscreen, 'fps-control-active': inputStore.fpsMode }"
+  >
     <div class="rm-operator-video">
       <VideoCanvas
         :offset-x="crosshairOffsetX"
@@ -344,10 +391,11 @@ watch(
         :show-center-dot="showCenterDot"
         :crosshair-color="visibleCrosshairColor"
       />
+      <HudEditorOverlay />
     </div>
 
     <RmTopStatusBar :last-error="lastError" :runtime-text="runtimeText" />
-    <RmLeftInfoRail v-if="!isCompetitionFullscreen" :last-error="lastError" :messages="systemMessages" />
+    <RmLeftInfoRail :last-error="lastError" :messages="systemMessages" />
     <RmCrosshairHud :success-message="successMessage" />
 
     <div v-if="!isCompetitionFullscreen" class="right-hud-stack" :class="{ collapsed: rightPanelCollapsed }">
@@ -412,6 +460,19 @@ watch(
         <p><kbd class="rm-key">F11</kbd> 全屏</p>
         <p><kbd class="rm-key">Esc</kbd> 关闭/退出</p>
       </div>
+      <div>
+        <h3>HUD</h3>
+        <p><kbd class="rm-key">U</kbd> 编辑器</p>
+        <p><kbd class="rm-key">Del</kbd> 删除元素</p>
+        <p><kbd class="rm-key">Ctrl</kbd> + Z/Y 撤销/重做</p>
+      </div>
+      <div>
+        <h3>键鼠</h3>
+        <p><kbd class="rm-key">Enter</kbd> FPS 模式</p>
+        <p><kbd class="rm-key">WASD</kbd> 移动位</p>
+        <p><kbd class="rm-key">I</kbd> 诊断面板</p>
+        <p><kbd class="rm-key">Left</kbd> 默认禁用发射</p>
+      </div>
     </section>
 
     <div v-if="lastError" class="hud-last-error">{{ lastError }}</div>
@@ -434,6 +495,18 @@ watch(
       <n-drawer-content v-if="activeDrawer === 'debug'" title="LINK DEBUG" closable>
         <RmHudPanel title="Decoder / Transport">
           <DebugPanel />
+        </RmHudPanel>
+      </n-drawer-content>
+
+      <n-drawer-content v-if="activeDrawer === 'hud'" title="HUD EDITOR" closable>
+        <RmHudPanel title="Custom HUD">
+          <HudEditorPanel />
+        </RmHudPanel>
+      </n-drawer-content>
+
+      <n-drawer-content v-if="activeDrawer === 'input'" title="LOW LATENCY INPUT" closable>
+        <RmHudPanel title="Keyboard / Mouse">
+          <InputDiagnosticsPanel />
         </RmHudPanel>
       </n-drawer-content>
 
@@ -580,8 +653,8 @@ watch(
   top: 105px;
   z-index: 30;
   display: grid;
-  width: min(760px, calc(100vw - 48px));
-  grid-template-columns: repeat(5, minmax(0, 1fr));
+  width: min(980px, calc(100vw - 48px));
+  grid-template-columns: repeat(7, minmax(0, 1fr));
   gap: 16px;
   padding: 18px;
   border-color: rgba(0, 229, 255, 0.52);
@@ -636,6 +709,10 @@ watch(
 .competition-fullscreen .preset-chip {
   left: 22px;
   bottom: 18px;
+}
+
+.fps-control-active {
+  cursor: none;
 }
 
 @media (max-width: 1180px) {

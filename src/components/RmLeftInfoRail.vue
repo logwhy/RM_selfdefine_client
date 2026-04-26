@@ -1,5 +1,5 @@
 <script setup lang="ts">
-import { computed } from 'vue'
+import { computed, ref } from 'vue'
 import { useModeStore } from '../stores/mode'
 import { useUiStore } from '../stores/ui'
 import { useVideoStore } from '../stores/video'
@@ -12,34 +12,46 @@ const props = defineProps<{
 const modeStore = useModeStore()
 const uiStore = useUiStore()
 const videoStore = useVideoStore()
+const collapsed = ref(false)
+
 const deployText = computed(() => {
   if (modeStore.deployModeState === 'active') return '已部署'
   if (modeStore.deployModeState === 'inactive') return '未部署'
   return '未知'
 })
+
 const activePresetName = computed(() => {
   return uiStore.crosshairPresets.find((preset) => preset.id === uiStore.activePresetId)?.name ?? '默认'
 })
 </script>
 
 <template>
-  <aside class="rm-left-rail">
-    <div class="hero-block">
-      <span>当前机器人</span>
-      <strong>英雄</strong>
+  <aside class="rm-left-rail" :class="{ collapsed }">
+    <div class="left-rail-content rm-glass-panel">
+      <div class="hero-block">
+        <span>当前机器人</span>
+        <strong>英雄</strong>
+      </div>
+
+      <div class="status-list">
+        <p><span>部署模式</span><b>{{ deployText }}</b></p>
+        <p><span>MQTT</span><b :class="modeStore.mqttConnected ? 'ok' : 'bad'">{{ modeStore.mqttConnected ? 'ONLINE' : 'OFFLINE' }}</b></p>
+        <p><span>CustomBlock</span><b :class="videoStore.customBlockPacketsReceived > 0 ? 'ok' : ''">{{ videoStore.customBlockPacketsReceived }}</b></p>
+        <p><span>裁判消息</span><b :class="modeStore.lastRefereeMessageAt ? 'ok' : ''">{{ modeStore.lastRefereeMessageAt ? 'RX' : '-' }}</b></p>
+        <p><span>准星预设</span><b>{{ activePresetName }}</b></p>
+      </div>
+
+      <div class="message-list">
+        <h4>系统消息</h4>
+        <p v-if="lastError" class="error">{{ lastError }}</p>
+        <p v-for="message in props.messages.slice(0, 5)" :key="message">{{ message }}</p>
+        <p v-if="props.messages.length === 0 && !lastError">等待链路状态...</p>
+      </div>
     </div>
-    <div class="status-list">
-      <p><span>部署模式</span><b>{{ deployText }}</b></p>
-      <p><span>MQTT</span><b :class="modeStore.mqttConnected ? 'ok' : 'bad'">{{ modeStore.mqttConnected ? 'ONLINE' : 'OFFLINE' }}</b></p>
-      <p><span>CustomBlock</span><b :class="videoStore.customBlockPacketsReceived > 0 ? 'ok' : ''">{{ videoStore.customBlockPacketsReceived }}</b></p>
-      <p><span>准星预设</span><b>{{ activePresetName }}</b></p>
-    </div>
-    <div class="message-list">
-      <h4>系统消息</h4>
-      <p v-if="lastError" class="error">{{ lastError }}</p>
-      <p v-for="message in props.messages.slice(0, 5)" :key="message">{{ message }}</p>
-      <p v-if="props.messages.length === 0 && !lastError">等待链路状态...</p>
-    </div>
+
+    <button class="left-rail-toggle" :title="collapsed ? '展开左侧信息' : '隐藏左侧信息'" @click="collapsed = !collapsed">
+      {{ collapsed ? '>' : '<' }}
+    </button>
   </aside>
 </template>
 
@@ -48,9 +60,57 @@ const activePresetName = computed(() => {
   position: absolute;
   left: 24px;
   top: 96px;
-  z-index: 12;
-  width: 286px;
+  z-index: 40;
+  width: 326px;
+  height: auto;
   color: var(--rm-op-text);
+  pointer-events: none;
+}
+
+.left-rail-content {
+  width: 286px;
+  max-height: calc(100vh - 150px);
+  overflow: auto;
+  padding: 14px;
+  border-color: rgba(0, 229, 255, 0.5);
+  background:
+    linear-gradient(135deg, rgba(0, 229, 255, 0.1), transparent 42%),
+    rgba(5, 10, 16, 0.92);
+  opacity: 1;
+  pointer-events: auto;
+  transform: translateX(0);
+  transition: transform 180ms ease, opacity 140ms ease;
+}
+
+.rm-left-rail.collapsed .left-rail-content {
+  opacity: 0;
+  transform: translateX(-326px);
+}
+
+.left-rail-toggle {
+  position: absolute;
+  left: 294px;
+  top: 0;
+  width: 28px;
+  height: 76px;
+  border: 1px solid rgba(0, 229, 255, 0.48);
+  border-radius: 0 8px 8px 0;
+  background: rgba(3, 8, 14, 0.98);
+  color: var(--rm-op-cyan);
+  cursor: pointer;
+  font-size: 18px;
+  line-height: 1;
+  pointer-events: auto;
+  box-shadow: 0 0 18px rgba(0, 229, 255, 0.18);
+  transition: left 180ms ease;
+}
+
+.rm-left-rail.collapsed .left-rail-toggle {
+  left: 0;
+}
+
+.left-rail-toggle:hover {
+  border-color: var(--rm-op-cyan);
 }
 
 .hero-block {
@@ -88,7 +148,7 @@ const activePresetName = computed(() => {
   margin: 0;
   padding: 7px 0;
   border-bottom: 1px solid rgba(234, 247, 255, 0.07);
-  color: rgba(234, 247, 255, 0.66);
+  color: rgba(234, 247, 255, 0.72);
   font-size: 12px;
 }
 
@@ -111,7 +171,7 @@ const activePresetName = computed(() => {
 
 .message-list h4 {
   margin: 0 0 8px;
-  color: rgba(234, 247, 255, 0.72);
+  color: rgba(234, 247, 255, 0.78);
   font-size: 12px;
 }
 
@@ -121,7 +181,8 @@ const activePresetName = computed(() => {
 
 @media (max-width: 1180px) {
   .rm-left-rail {
-    display: none;
+    left: 12px;
+    top: 86px;
   }
 }
 </style>

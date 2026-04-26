@@ -1,8 +1,16 @@
 <script setup lang="ts">
 import { NCard, NDescriptions, NDescriptionsItem } from 'naive-ui'
+import { computed } from 'vue'
+import { useModeStore } from '../stores/mode'
 import { useVideoStore } from '../stores/video'
 
 const videoStore = useVideoStore()
+const modeStore = useModeStore()
+const refereeTopicText = computed(() => {
+  const entries = Object.entries(modeStore.refereeTopicCounts)
+  if (entries.length === 0) return '-'
+  return entries.map(([topic, count]) => `${topic}:${count}`).join(' / ')
+})
 </script>
 
 <template>
@@ -40,6 +48,12 @@ const videoStore = useVideoStore()
       <n-descriptions-item label="avgEndToEndLatencyMs">{{ videoStore.avgEndToEndLatencyMs }}</n-descriptions-item>
       <n-descriptions-item label="fps">{{ videoStore.fps }}</n-descriptions-item>
       <n-descriptions-item label="streamAlive">{{ videoStore.streamAlive }}</n-descriptions-item>
+      <n-descriptions-item label="refereeLastMessageAt">{{ modeStore.lastRefereeMessageAt ?? '-' }}</n-descriptions-item>
+      <n-descriptions-item label="refereeTopicCounts">{{ refereeTopicText }}</n-descriptions-item>
+      <n-descriptions-item label="gameStageCountdown">{{ modeStore.gameStatus.stageCountdownSec ?? '-' }}</n-descriptions-item>
+      <n-descriptions-item label="robotHpHeat">
+        {{ modeStore.robotDynamicStatus.currentHealth ?? '-' }} / {{ modeStore.robotDynamicStatus.currentHeat ?? '-' }}
+      </n-descriptions-item>
       <n-descriptions-item label="packetsReceived">{{ videoStore.packetsReceived }}</n-descriptions-item>
       <n-descriptions-item label="readyFrames">{{ videoStore.readyFrames }}</n-descriptions-item>
       <n-descriptions-item label="decoderResetCount">{{ videoStore.decoderResetCount }}</n-descriptions-item>

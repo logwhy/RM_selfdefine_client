@@ -1,8 +1,9 @@
 import { invoke } from '@tauri-apps/api/core'
 import { listen, type UnlistenFn } from '@tauri-apps/api/event'
-import type { ModeSyncPayload, MqttCommandResult, MqttConnectParams } from '../types/mode'
+import type { ModeSyncPayload, MqttCommandResult, MqttConnectParams, RefereeMessagePayload } from '../types/mode'
 
 export const MODE_SYNC_EVENT = 'mode_sync'
+export const REFEREE_MESSAGE_EVENT = 'referee_message'
 const NOOP_UNLISTEN: UnlistenFn = async () => {}
 
 function isTauriRuntime(): boolean {
@@ -40,6 +41,17 @@ export async function subscribeModeSync(
     return NOOP_UNLISTEN
   }
   return listen<ModeSyncPayload>(MODE_SYNC_EVENT, (event) => {
+    handler(event.payload)
+  })
+}
+
+export async function subscribeRefereeMessages(
+  handler: (payload: RefereeMessagePayload) => void,
+): Promise<UnlistenFn> {
+  if (!isTauriRuntime()) {
+    return NOOP_UNLISTEN
+  }
+  return listen<RefereeMessagePayload>(REFEREE_MESSAGE_EVENT, (event) => {
     handler(event.payload)
   })
 }
