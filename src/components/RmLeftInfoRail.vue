@@ -23,10 +23,17 @@ const deployText = computed(() => {
 const activePresetName = computed(() => {
   return uiStore.crosshairPresets.find((preset) => preset.id === uiStore.activePresetId)?.name ?? '默认'
 })
+
+const latestEvent = computed(() => modeStore.refereeEvents[0] ?? null)
 </script>
 
 <template>
   <aside class="rm-left-rail" :class="{ collapsed }">
+    <div v-if="collapsed && latestEvent" class="event-toast rm-glass-panel">
+      <span>裁判事件</span>
+      <strong>{{ latestEvent.text }}</strong>
+    </div>
+
     <div class="left-rail-content rm-glass-panel">
       <div class="hero-block">
         <span>当前机器人</span>
@@ -36,9 +43,18 @@ const activePresetName = computed(() => {
       <div class="status-list">
         <p><span>部署模式</span><b>{{ deployText }}</b></p>
         <p><span>MQTT</span><b :class="modeStore.mqttConnected ? 'ok' : 'bad'">{{ modeStore.mqttConnected ? 'ONLINE' : 'OFFLINE' }}</b></p>
-        <p><span>CustomBlock</span><b :class="videoStore.customBlockPacketsReceived > 0 ? 'ok' : ''">{{ videoStore.customBlockPacketsReceived }}</b></p>
+        <p><span>CustomByteBlock</span><b :class="videoStore.customBlockPacketsReceived > 0 ? 'ok' : ''">{{ videoStore.customBlockPacketsReceived }}</b></p>
         <p><span>裁判消息</span><b :class="modeStore.lastRefereeMessageAt ? 'ok' : ''">{{ modeStore.lastRefereeMessageAt ? 'RX' : '-' }}</b></p>
+        <p><span>机器人 ID</span><b>{{ modeStore.robotStaticStatus.robotId ?? '-' }}</b></p>
         <p><span>准星预设</span><b>{{ activePresetName }}</b></p>
+      </div>
+
+      <div class="event-list">
+        <h4>裁判事件</h4>
+        <p v-for="event in modeStore.refereeEvents.slice(0, 4)" :key="`${event.receivedAt}-${event.eventId}-${event.param}`">
+          {{ event.text }}
+        </p>
+        <p v-if="modeStore.refereeEvents.length === 0">等待事件...</p>
       </div>
 
       <div class="message-list">
@@ -113,6 +129,31 @@ const activePresetName = computed(() => {
   border-color: var(--rm-op-cyan);
 }
 
+.event-toast {
+  position: absolute;
+  left: 42px;
+  top: 0;
+  width: 330px;
+  padding: 10px 12px;
+  border-color: rgba(255, 201, 58, 0.5);
+  background: rgba(28, 18, 4, 0.88);
+  pointer-events: none;
+}
+
+.event-toast span {
+  display: block;
+  color: var(--rm-op-yellow);
+  font-size: 11px;
+  font-weight: 800;
+}
+
+.event-toast strong {
+  display: block;
+  margin-top: 4px;
+  color: var(--rm-op-text);
+  font-size: 13px;
+}
+
 .hero-block {
   display: flex;
   flex-direction: column;
@@ -142,7 +183,8 @@ const activePresetName = computed(() => {
 }
 
 .status-list p,
-.message-list p {
+.message-list p,
+.event-list p {
   display: flex;
   justify-content: space-between;
   margin: 0;
@@ -165,17 +207,20 @@ const activePresetName = computed(() => {
   color: var(--rm-op-red);
 }
 
-.message-list {
+.message-list,
+.event-list {
   margin-top: 20px;
 }
 
-.message-list h4 {
+.message-list h4,
+.event-list h4 {
   margin: 0 0 8px;
   color: rgba(234, 247, 255, 0.78);
   font-size: 12px;
 }
 
-.message-list p {
+.message-list p,
+.event-list p {
   display: block;
 }
 

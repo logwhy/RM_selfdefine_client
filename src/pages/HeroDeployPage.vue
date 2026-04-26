@@ -144,7 +144,7 @@ function pushMessage(message: string) {
 function modeStatusWarning() {
   if (videoStore.currentMode === 'hero_lob') {
     if (!modeStore.mqttConnected) return 'MQTT 未连接'
-    if (videoStore.customBlockPacketsReceived === 0 && !videoStore.customBlockMockActive) return '未收到 CustomBlock / 0x0310'
+    if (videoStore.customBlockPacketsReceived === 0 && !videoStore.customBlockMockActive) return '未收到 CustomByteBlock / 0x0310'
     if (!videoStore.h264SeenSps || !videoStore.h264SeenPps) return 'H264 等待 SPS/PPS'
     if (!videoStore.decoderInitSuccess && videoStore.realDecoderEnabled) return 'H264 decoder 未就绪'
     if (videoStore.h264ConsecutiveDecodeErrors > 0) return 'decoder 异常'
@@ -574,7 +574,7 @@ watch(
             </n-space>
           </RmHudPanel>
 
-          <RmHudPanel title="CustomBlock H264">
+          <RmHudPanel title="CustomByteBlock H264">
             <n-select
               v-model:value="videoStore.customBlockParserMode"
               :options="parserOptions"

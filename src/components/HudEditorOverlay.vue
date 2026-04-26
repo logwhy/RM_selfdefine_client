@@ -29,9 +29,57 @@ function bindingValue(element: HudElement) {
   if (element.binding === 'GameStatus.stage_countdown_sec') return `${modeStore.gameStatus.stageCountdownSec ?? 420}s`
   if (element.binding === 'RobotDynamicStatus.hp') return modeStore.robotDynamicStatus.currentHealth ?? element.value ?? 85
   if (element.binding === 'RobotDynamicStatus.heat') return Math.round(modeStore.robotDynamicStatus.currentHeat ?? 36)
+  if (element.binding === 'RobotDynamicStatus.chassis_energy') return modeStore.robotDynamicStatus.currentChassisEnergy ?? element.value ?? 70
+  if (element.binding === 'RobotDynamicStatus.buffer_energy') return modeStore.robotDynamicStatus.currentBufferEnergy ?? element.value ?? 70
+  if (element.binding === 'RobotStaticStatus.robot_id') return modeStore.robotStaticStatus.robotId ?? '-'
   if (element.binding === 'mqttConnected') return modeStore.mqttConnected
   if (element.binding === 'fps') return videoStore.fps
   return element.value ?? element.text ?? ''
+}
+
+function bindingRatio(element: HudElement) {
+  if (element.binding === 'RobotDynamicStatus.hp') {
+    const current = modeStore.robotDynamicStatus.currentHealth ?? element.value ?? 85
+    const max = modeStore.robotStaticStatus.maxHealth ?? 100
+    return max > 0 ? current / max : 0
+  }
+  if (element.binding === 'RobotDynamicStatus.heat') {
+    const current = modeStore.robotDynamicStatus.currentHeat ?? element.value ?? 36
+    const max = modeStore.robotStaticStatus.maxHeat ?? 100
+    return max > 0 ? current / max : 0
+  }
+  if (element.binding === 'RobotDynamicStatus.chassis_energy') {
+    const current = modeStore.robotDynamicStatus.currentChassisEnergy ?? element.value ?? 70
+    const max = modeStore.robotStaticStatus.maxChassisEnergy ?? 100
+    return max > 0 ? current / max : 0
+  }
+  if (element.binding === 'RobotDynamicStatus.buffer_energy') {
+    const current = modeStore.robotDynamicStatus.currentBufferEnergy ?? element.value ?? 70
+    const max = modeStore.robotStaticStatus.maxBufferEnergy ?? 100
+    return max > 0 ? current / max : 0
+  }
+  const raw = Number(bindingValue(element))
+  return raw / 100
+}
+
+function dynamicElementColor(element: HudElement, percent?: number) {
+  if (element.binding === 'mqttConnected') return modeStore.mqttConnected ? '#2cff8c' : '#ff3045'
+  if (!element.autoColor || percent === undefined) return element.color
+  const warn = element.warnThreshold ?? (element.binding === 'RobotDynamicStatus.heat' ? 0.7 : 0.5)
+  const danger = element.dangerThreshold ?? (element.binding === 'RobotDynamicStatus.heat' ? 0.9 : 0.25)
+  if (element.binding === 'RobotDynamicStatus.hp') {
+    if (percent <= danger) return element.dangerColor ?? '#ff3045'
+    if (percent <= warn) return element.warnColor ?? '#ffc93a'
+    return element.color
+  }
+  if (element.binding === 'RobotDynamicStatus.heat') {
+    if (percent >= danger) return element.dangerColor ?? '#ff3045'
+    if (percent >= warn) return element.warnColor ?? '#ffc93a'
+    return element.color
+  }
+  if (percent <= danger) return element.dangerColor ?? '#ff3045'
+  if (percent <= warn) return element.warnColor ?? '#ffc93a'
+  return element.color
 }
 
 function resizeCanvas() {
@@ -106,14 +154,17 @@ function drawElement(ctx: CanvasRenderingContext2D, element: HudElement) {
     ctx.textBaseline = 'top'
     ctx.fillText(String(bindingValue(element) || element.text || 'TEXT'), element.x, element.y)
   } else if (element.type === 'bar') {
-    const raw = Number(bindingValue(element))
-    const percent = Math.max(0, Math.min(1, raw / 100))
+    const percent = Math.max(0, Math.min(1, bindingRatio(element)))
+    const fillColor = dynamicElementColor(element, percent)
+    ctx.strokeStyle = fillColor
+    ctx.fillStyle = fillColor
+    ctx.shadowColor = fillColor
     ctx.strokeRect(box.x, box.y, box.w, Math.max(10, box.h))
     ctx.globalAlpha = 0.65
     ctx.fillRect(box.x + 2, box.y + 2, Math.max(0, box.w - 4) * percent, Math.max(0, box.h - 4))
   } else if (element.type === 'statusLight') {
-    const active = Boolean(bindingValue(element))
-    ctx.fillStyle = active ? '#2cff8c' : '#ff3045'
+    ctx.fillStyle = dynamicElementColor(element)
+    ctx.shadowColor = ctx.fillStyle
     ctx.beginPath()
     ctx.arc(box.x + box.w / 2, box.y + box.h / 2, Math.max(6, Math.min(box.w, box.h) / 2), 0, Math.PI * 2)
     ctx.fill()

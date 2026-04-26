@@ -9,6 +9,9 @@ export type HudDataBinding =
   | 'GameStatus.stage_countdown_sec'
   | 'RobotDynamicStatus.hp'
   | 'RobotDynamicStatus.heat'
+  | 'RobotDynamicStatus.chassis_energy'
+  | 'RobotDynamicStatus.buffer_energy'
+  | 'RobotStaticStatus.robot_id'
   | 'mqttConnected'
   | 'fps'
 
@@ -21,6 +24,11 @@ export interface HudElement {
   h: number
   text?: string
   color: string
+  warnColor?: string
+  dangerColor?: string
+  autoColor?: boolean
+  warnThreshold?: number
+  dangerThreshold?: number
   binding: HudDataBinding
   value?: number
 }
@@ -43,7 +51,20 @@ function createElement(type: HudElementType, x = 44, y = 44, color = '#00e5ff'):
   if (type === 'line') return { ...base, w: 220, h: 0 }
   if (type === 'circle') return { ...base, w: 86, h: 86 }
   if (type === 'text') return { ...base, w: 220, h: 34, text: 'HUD TEXT' }
-  if (type === 'bar') return { ...base, w: 220, h: 20, binding: 'RobotDynamicStatus.hp', value: 70 }
+  if (type === 'bar') {
+    return {
+      ...base,
+      w: 220,
+      h: 20,
+      binding: 'RobotDynamicStatus.hp',
+      value: 70,
+      autoColor: true,
+      warnColor: '#ffc93a',
+      dangerColor: '#ff3045',
+      warnThreshold: 0.5,
+      dangerThreshold: 0.25,
+    }
+  }
   if (type === 'statusLight') return { ...base, w: 26, h: 26, binding: 'mqttConnected' }
   return base
 }
@@ -52,7 +73,7 @@ const defaultHeroTemplate: HudTemplate = {
   name: '默认英雄',
   elements: [
     { id: 'hero-countdown', type: 'text', x: 330, y: 82, w: 210, h: 34, text: 'COUNTDOWN', color: '#ffc93a', binding: 'GameStatus.stage_countdown_sec' },
-    { id: 'hero-hp', type: 'bar', x: 330, y: 128, w: 220, h: 22, color: '#2cff8c', binding: 'RobotDynamicStatus.hp', value: 85 },
+    { id: 'hero-hp', type: 'bar', x: 330, y: 128, w: 220, h: 22, color: '#2cff8c', warnColor: '#ffc93a', dangerColor: '#ff3045', autoColor: true, warnThreshold: 0.5, dangerThreshold: 0.25, binding: 'RobotDynamicStatus.hp', value: 85 },
     { id: 'hero-link', type: 'statusLight', x: 330, y: 166, w: 24, h: 24, color: '#00e5ff', binding: 'mqttConnected' },
   ],
 }
@@ -61,7 +82,7 @@ const minimalTemplate: HudTemplate = {
   name: '极简比赛',
   elements: [
     { id: 'minimal-fps', type: 'text', x: 330, y: 82, w: 120, h: 30, text: 'FPS', color: '#00e5ff', binding: 'fps' },
-    { id: 'minimal-hp', type: 'bar', x: 330, y: 120, w: 170, h: 16, color: '#2cff8c', binding: 'RobotDynamicStatus.hp', value: 85 },
+    { id: 'minimal-hp', type: 'bar', x: 330, y: 120, w: 170, h: 16, color: '#2cff8c', warnColor: '#ffc93a', dangerColor: '#ff3045', autoColor: true, warnThreshold: 0.5, dangerThreshold: 0.25, binding: 'RobotDynamicStatus.hp', value: 85 },
   ],
 }
 

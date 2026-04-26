@@ -29,10 +29,32 @@ export interface RobotDynamicStatusPayload {
   remainingAmmo: number | null
 }
 
+export interface RobotStaticStatusPayload {
+  connectionState: number | null
+  fieldState: number | null
+  aliveState: number | null
+  robotId: number | null
+  robotType: number | null
+  level: number | null
+  maxHealth: number | null
+  maxHeat: number | null
+  heatCooldownRate: number | null
+  maxPower: number | null
+  maxBufferEnergy: number | null
+  maxChassisEnergy: number | null
+}
+
+export interface RefereeEventPayload {
+  eventId: number | null
+  param: string | null
+}
+
 export interface RefereeMessagePayload {
   topic: string
   bytes: number
   receivedAt: string
   gameStatus: GameStatusPayload | null
   robotDynamicStatus: RobotDynamicStatusPayload | null
+  robotStaticStatus: RobotStaticStatusPayload | null
+  event: RefereeEventPayload | null
 }

@@ -54,6 +54,15 @@ const refereeTopicText = computed(() => {
       <n-descriptions-item label="robotHpHeat">
         {{ modeStore.robotDynamicStatus.currentHealth ?? '-' }} / {{ modeStore.robotDynamicStatus.currentHeat ?? '-' }}
       </n-descriptions-item>
+      <n-descriptions-item label="robotIdLevel">
+        {{ modeStore.robotStaticStatus.robotId ?? '-' }} / Lv {{ modeStore.robotStaticStatus.level ?? '-' }}
+      </n-descriptions-item>
+      <n-descriptions-item label="maxHpHeat">
+        {{ modeStore.robotStaticStatus.maxHealth ?? '-' }} / {{ modeStore.robotStaticStatus.maxHeat ?? '-' }}
+      </n-descriptions-item>
+      <n-descriptions-item label="latestRefereeEvent">
+        {{ modeStore.refereeEvents[0]?.text ?? '-' }}
+      </n-descriptions-item>
       <n-descriptions-item label="packetsReceived">{{ videoStore.packetsReceived }}</n-descriptions-item>
       <n-descriptions-item label="readyFrames">{{ videoStore.readyFrames }}</n-descriptions-item>
       <n-descriptions-item label="decoderResetCount">{{ videoStore.decoderResetCount }}</n-descriptions-item>

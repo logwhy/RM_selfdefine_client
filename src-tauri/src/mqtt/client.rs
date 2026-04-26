@@ -71,6 +71,30 @@ pub struct RobotDynamicStatusPayload {
     pub remaining_ammo: Option<u32>,
 }
 
+#[derive(Debug, Clone, Default, Serialize)]
+#[serde(rename_all = "camelCase")]
+pub struct RobotStaticStatusPayload {
+    pub connection_state: Option<u32>,
+    pub field_state: Option<u32>,
+    pub alive_state: Option<u32>,
+    pub robot_id: Option<u32>,
+    pub robot_type: Option<u32>,
+    pub level: Option<u32>,
+    pub max_health: Option<u32>,
+    pub max_heat: Option<u32>,
+    pub heat_cooldown_rate: Option<f32>,
+    pub max_power: Option<u32>,
+    pub max_buffer_energy: Option<u32>,
+    pub max_chassis_energy: Option<u32>,
+}
+
+#[derive(Debug, Clone, Default, Serialize)]
+#[serde(rename_all = "camelCase")]
+pub struct RefereeEventPayload {
+    pub event_id: Option<i32>,
+    pub param: Option<String>,
+}
+
 #[derive(Debug, Clone, Serialize)]
 #[serde(rename_all = "camelCase")]
 pub struct RefereeMessagePayload {
@@ -79,6 +103,8 @@ pub struct RefereeMessagePayload {
     pub received_at: String,
     pub game_status: Option<GameStatusPayload>,
     pub robot_dynamic_status: Option<RobotDynamicStatusPayload>,
+    pub robot_static_status: Option<RobotStaticStatusPayload>,
+    pub event: Option<RefereeEventPayload>,
 }
 
 pub struct MqttRuntime {
@@ -299,6 +325,16 @@ fn emit_referee_message(app: &tauri::AppHandle, topic: &str, payload: &[u8]) {
         } else {
             None
         },
+        robot_static_status: if topic == "RobotStaticStatus" {
+            Some(parse_robot_static_status_payload(payload))
+        } else {
+            None
+        },
+        event: if topic == "Event" {
+            Some(parse_event_payload(payload))
+        } else {
+            None
+        },
     };
 
     if let Err(error) = app.emit("referee_message", event) {
@@ -331,9 +367,42 @@ fn parse_robot_dynamic_status_payload(payload: &[u8]) -> RobotDynamicStatusPaylo
     parsed
 }
 
+fn parse_robot_static_status_payload(payload: &[u8]) -> RobotStaticStatusPayload {
+    let mut parsed = RobotStaticStatusPayload::default();
+    visit_protobuf_fields(payload, |field_number, wire_type, value| match (field_number, wire_type, value) {
+        (1, 0, ProtoValue::Varint(value)) => parsed.connection_state = Some(value as u32),
+        (2, 0, ProtoValue::Varint(value)) => parsed.field_state = Some(value as u32),
+        (3, 0, ProtoValue::Varint(value)) => parsed.alive_state = Some(value as u32),
+        (4, 0, ProtoValue::Varint(value)) => parsed.robot_id = Some(value as u32),
+        (5, 0, ProtoValue::Varint(value)) => parsed.robot_type = Some(value as u32),
+        (8, 0, ProtoValue::Varint(value)) => parsed.level = Some(value as u32),
+        (9, 0, ProtoValue::Varint(value)) => parsed.max_health = Some(value as u32),
+        (10, 0, ProtoValue::Varint(value)) => parsed.max_heat = Some(value as u32),
+        (11, 5, ProtoValue::Fixed32(value)) => parsed.heat_cooldown_rate = Some(f32::from_bits(value)),
+        (12, 0, ProtoValue::Varint(value)) => parsed.max_power = Some(value as u32),
+        (13, 0, ProtoValue::Varint(value)) => parsed.max_buffer_energy = Some(value as u32),
+        (14, 0, ProtoValue::Varint(value)) => parsed.max_chassis_energy = Some(value as u32),
+        _ => {}
+    });
+    parsed
+}
+
+fn parse_event_payload(payload: &[u8]) -> RefereeEventPayload {
+    let mut parsed = RefereeEventPayload::default();
+    visit_protobuf_fields(payload, |field_number, wire_type, value| match (field_number, wire_type, value) {
+        (1, 0, ProtoValue::Varint(value)) => parsed.event_id = Some(decode_i32_varint(value)),
+        (2, 2, ProtoValue::Bytes(bytes)) => {
+            parsed.param = String::from_utf8(bytes).ok();
+        }
+        _ => {}
+    });
+    parsed
+}
+
 enum ProtoValue {
     Varint(u64),
     Fixed32(u32),
+    Bytes(Vec<u8>),
 }
 
 fn visit_protobuf_fields(payload: &[u8], mut visitor: impl FnMut(u64, u64, ProtoValue)) {
@@ -356,10 +425,12 @@ fn visit_protobuf_fields(payload: &[u8], mut visitor: impl FnMut(u64, u64, Proto
                 let Some(len) = read_varint_from(payload, &mut index).map(|value| value as usize) else {
                     return;
                 };
+                let start = index;
                 index = index.saturating_add(len);
                 if index > payload.len() {
                     return;
                 }
+                visitor(field_number, wire_type, ProtoValue::Bytes(payload[start..index].to_vec()));
             }
             5 => {
                 if index + 4 > payload.len() {

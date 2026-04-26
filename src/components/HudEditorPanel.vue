@@ -1,5 +1,6 @@
 <script setup lang="ts">
 import { NButton, NColorPicker, NInput, NInputNumber, NSelect, NSpace, NSwitch } from 'naive-ui'
+import { computed } from 'vue'
 import { useHudEditorStore, type HudDataBinding, type HudTool } from '../stores/hudEditor'
 
 const hudStore = useHudEditorStore()
@@ -21,9 +22,14 @@ const bindingOptions: { label: string; value: HudDataBinding }[] = [
   { label: '比赛倒计时', value: 'GameStatus.stage_countdown_sec' },
   { label: '机器人血量', value: 'RobotDynamicStatus.hp' },
   { label: '枪口热量', value: 'RobotDynamicStatus.heat' },
+  { label: '底盘能量', value: 'RobotDynamicStatus.chassis_energy' },
+  { label: '缓冲能量', value: 'RobotDynamicStatus.buffer_energy' },
+  { label: '机器人 ID', value: 'RobotStaticStatus.robot_id' },
   { label: 'MQTT 连接', value: 'mqttConnected' },
   { label: '视频 FPS', value: 'fps' },
 ]
+
+const isHeatBinding = computed(() => hudStore.selectedElement?.binding === 'RobotDynamicStatus.heat')
 </script>
 
 <template>
@@ -53,7 +59,7 @@ const bindingOptions: { label: string; value: HudDataBinding }[] = [
         />
       </div>
 
-      <div class="hint-line">在画面上按住拖动即可绘制；选中元素后拖动移动，拖白色手柄改变长度/大小。</div>
+      <div class="hint-line">在画面上按住拖动绘制；选中后拖动移动，拖白色手柄改变长度或大小。</div>
 
       <n-space>
         <n-button size="small" @click="hudStore.undo">撤销</n-button>
@@ -69,6 +75,7 @@ const bindingOptions: { label: string; value: HudDataBinding }[] = [
         比赛锁定
         <n-switch v-model:value="hudStore.locked" />
       </label>
+
       <template v-if="hudStore.selectedElement">
         <div class="selected-title">选中：{{ hudStore.selectedElement.type }}</div>
         <n-input
@@ -86,6 +93,59 @@ const bindingOptions: { label: string; value: HudDataBinding }[] = [
           :show-alpha="false"
           @update:value="(color) => hudStore.selectedElement && hudStore.updateElement(hudStore.selectedElement.id, { color })"
         />
+
+        <template v-if="hudStore.selectedElement.type === 'bar'">
+          <label class="panel-row">
+            阈值变色
+            <n-switch
+              :value="hudStore.selectedElement.autoColor ?? true"
+              @update:value="(autoColor) => hudStore.selectedElement && hudStore.updateElement(hudStore.selectedElement.id, { autoColor })"
+            />
+          </label>
+          <div class="bar-color-grid">
+            <span>正常色</span>
+            <n-color-picker
+              :value="hudStore.selectedElement.color"
+              :show-alpha="false"
+              size="small"
+              @update:value="(color) => hudStore.selectedElement && hudStore.updateElement(hudStore.selectedElement.id, { color })"
+            />
+            <span>警告色</span>
+            <n-color-picker
+              :value="hudStore.selectedElement.warnColor ?? '#ffc93a'"
+              :show-alpha="false"
+              size="small"
+              @update:value="(warnColor) => hudStore.selectedElement && hudStore.updateElement(hudStore.selectedElement.id, { warnColor })"
+            />
+            <span>危险色</span>
+            <n-color-picker
+              :value="hudStore.selectedElement.dangerColor ?? '#ff3045'"
+              :show-alpha="false"
+              size="small"
+              @update:value="(dangerColor) => hudStore.selectedElement && hudStore.updateElement(hudStore.selectedElement.id, { dangerColor })"
+            />
+            <span>警告阈值</span>
+            <n-input-number
+              :value="Math.round((hudStore.selectedElement.warnThreshold ?? (isHeatBinding ? 0.7 : 0.5)) * 100)"
+              size="small"
+              :min="0"
+              :max="100"
+              @update:value="(value) => hudStore.selectedElement && hudStore.updateElement(hudStore.selectedElement.id, { warnThreshold: (value ?? 0) / 100 })"
+            />
+            <span>危险阈值</span>
+            <n-input-number
+              :value="Math.round((hudStore.selectedElement.dangerThreshold ?? (isHeatBinding ? 0.9 : 0.25)) * 100)"
+              size="small"
+              :min="0"
+              :max="100"
+              @update:value="(value) => hudStore.selectedElement && hudStore.updateElement(hudStore.selectedElement.id, { dangerThreshold: (value ?? 0) / 100 })"
+            />
+          </div>
+          <div class="hint-line">
+            血量/能量低于阈值变色；热量高于阈值变色。阈值单位为百分比。
+          </div>
+        </template>
+
         <div class="numeric-grid">
           <span>X</span>
           <n-input-number
@@ -165,7 +225,8 @@ const bindingOptions: { label: string; value: HudDataBinding }[] = [
 
 .hint-line,
 .panel-row,
-.numeric-grid {
+.numeric-grid,
+.bar-color-grid {
   color: rgba(234, 247, 255, 0.72);
   font-size: 12px;
 }
@@ -174,6 +235,13 @@ const bindingOptions: { label: string; value: HudDataBinding }[] = [
   display: flex;
   align-items: center;
   justify-content: space-between;
+}
+
+.bar-color-grid {
+  display: grid;
+  grid-template-columns: 64px 1fr;
+  gap: 8px;
+  align-items: center;
 }
 
 .numeric-grid {

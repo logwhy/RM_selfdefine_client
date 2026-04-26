@@ -18,7 +18,7 @@ const parameterStatus = computed(() =>
   <aside v-if="showMonitor" class="rm-link-monitor rm-glass-panel">
     <h3>链路监控</h3>
     <div class="monitor-grid">
-      <span>CustomBlock</span><b>{{ videoStore.customBlockPacketsPerSecond }}/s</b>
+      <span>CustomByteBlock</span><b>{{ videoStore.customBlockPacketsPerSecond }}/s</b>
       <span>Bitrate</span><b>{{ videoStore.customBlockBitrateKbps }} kbps</b>
       <span>Decoder Reset</span><b>{{ videoStore.decoderResetCount }}</b>
       <span>SPS/PPS/IDR</span><b>{{ parameterStatus }}</b>

@@ -1,6 +1,12 @@
 import { defineStore } from 'pinia'
 import { computed, ref } from 'vue'
-import type { GameStatusPayload, RefereeMessagePayload, RobotDynamicStatusPayload } from '../types/mode'
+import type {
+  GameStatusPayload,
+  RefereeMessagePayload,
+  RefereeEventPayload,
+  RobotDynamicStatusPayload,
+  RobotStaticStatusPayload,
+} from '../types/mode'
 
 export type DeployModeState = 'unknown' | 'active' | 'inactive'
 
@@ -24,6 +30,21 @@ export const useModeStore = defineStore('mode', () => {
     currentBufferEnergy: null,
     remainingAmmo: null,
   })
+  const robotStaticStatus = ref<RobotStaticStatusPayload>({
+    connectionState: null,
+    fieldState: null,
+    aliveState: null,
+    robotId: null,
+    robotType: null,
+    level: null,
+    maxHealth: null,
+    maxHeat: null,
+    heatCooldownRate: null,
+    maxPower: null,
+    maxBufferEnergy: null,
+    maxChassisEnergy: null,
+  })
+  const refereeEvents = ref<Array<RefereeEventPayload & { receivedAt: string; text: string }>>([])
 
   const deployModeState = computed<DeployModeState>(() => {
     if (deployModeActive.value === null) {
@@ -63,6 +84,57 @@ export const useModeStore = defineStore('mode', () => {
     if (payload.robotDynamicStatus) {
       robotDynamicStatus.value = { ...robotDynamicStatus.value, ...payload.robotDynamicStatus }
     }
+    if (payload.robotStaticStatus) {
+      robotStaticStatus.value = { ...robotStaticStatus.value, ...payload.robotStaticStatus }
+    }
+    if (payload.event) {
+      refereeEvents.value = [
+        {
+          ...payload.event,
+          receivedAt: payload.receivedAt,
+          text: describeRefereeEvent(payload.event),
+        },
+        ...refereeEvents.value,
+      ].slice(0, 8)
+    }
+  }
+
+  function describeRefereeEvent(event: RefereeEventPayload) {
+    const suffix = event.param ? ` / ${event.param}` : ''
+    switch (event.eventId) {
+      case 1:
+        return `己方机器人战亡${suffix}`
+      case 2:
+        return `对方机器人战亡${suffix}`
+      case 3:
+        return `大能量机关激活结果${suffix}`
+      case 4:
+        return `能量机关已激活${suffix}`
+      case 5:
+        return `己方英雄狙击伤害${suffix}`
+      case 6:
+        return `对方英雄狙击伤害${suffix}`
+      case 7:
+        return '对方呼叫空中支援'
+      case 8:
+        return `对方空中支援被反制${suffix}`
+      case 9:
+        return `飞镖命中${suffix}`
+      case 10:
+        return '对方飞镖闸门开启'
+      case 11:
+        return '基地遭到攻击'
+      case 12:
+        return '对方前哨站停转'
+      case 13:
+        return '对方基地护甲展开'
+      case 14:
+        return '对方请求四级装配，进入强制退出缓冲期'
+      case 15:
+        return `装配结果事件${suffix}`
+      default:
+        return `裁判事件 ${event.eventId ?? '-'}${suffix}`
+    }
   }
 
   return {
@@ -74,6 +146,8 @@ export const useModeStore = defineStore('mode', () => {
     refereeTopicCounts,
     gameStatus,
     robotDynamicStatus,
+    robotStaticStatus,
+    refereeEvents,
     deployModeState,
     applyModeSync,
     applyRefereeMessage,
