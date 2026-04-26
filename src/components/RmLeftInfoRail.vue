@@ -43,6 +43,7 @@ const latestEvent = computed(() => modeStore.refereeEvents[0] ?? null)
       <div class="status-list">
         <p><span>部署模式</span><b>{{ deployText }}</b></p>
         <p><span>MQTT</span><b :class="modeStore.mqttConnected ? 'ok' : 'bad'">{{ modeStore.mqttConnected ? 'ONLINE' : 'OFFLINE' }}</b></p>
+        <p><span>MQTT Endpoint</span><b>{{ modeStore.mqttHost ? `${modeStore.mqttHost}:${modeStore.mqttPort ?? '-'}` : '-' }}</b></p>
         <p><span>CustomByteBlock</span><b :class="videoStore.customBlockPacketsReceived > 0 ? 'ok' : ''">{{ videoStore.customBlockPacketsReceived }}</b></p>
         <p><span>裁判消息</span><b :class="modeStore.lastRefereeMessageAt ? 'ok' : ''">{{ modeStore.lastRefereeMessageAt ? 'RX' : '-' }}</b></p>
         <p><span>机器人 ID</span><b>{{ modeStore.robotStaticStatus.robotId ?? '-' }}</b></p>

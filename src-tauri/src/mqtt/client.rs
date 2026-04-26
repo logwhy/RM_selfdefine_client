@@ -48,6 +48,8 @@ const REFEREE_TOPICS: &[&str] = &[
 #[serde(rename_all = "camelCase")]
 pub struct ModeSyncEventPayload {
     pub mqtt_connected: bool,
+    pub mqtt_host: Option<String>,
+    pub mqtt_port: Option<u16>,
     pub deploy_mode_active: Option<bool>,
     pub last_mode_sync_at: Option<String>,
 }
@@ -108,16 +110,29 @@ pub struct RefereeMessagePayload {
 }
 
 pub struct MqttRuntime {
+    host: String,
+    port: u16,
     stop_tx: Option<oneshot::Sender<()>>,
     join_handle: tokio::task::JoinHandle<()>,
 }
 
 impl MqttRuntime {
-    pub fn new(stop_tx: oneshot::Sender<()>, join_handle: tokio::task::JoinHandle<()>) -> Self {
+    pub fn new(
+        host: String,
+        port: u16,
+        stop_tx: oneshot::Sender<()>,
+        join_handle: tokio::task::JoinHandle<()>,
+    ) -> Self {
         Self {
+            host,
+            port,
             stop_tx: Some(stop_tx),
             join_handle,
         }
+    }
+
+    pub fn endpoint_matches(&self, host: &str, port: u16) -> bool {
+        self.host == host && self.port == port
     }
 
     pub async fn stop(mut self) {
@@ -141,17 +156,30 @@ pub fn spawn_mqtt_loop(
     input_diagnostics: Arc<Mutex<InputDiagnostics>>,
 ) -> MqttRuntime {
     let (stop_tx, mut stop_rx) = oneshot::channel::<()>();
+    let runtime_host = host.clone();
+    let runtime_port = port;
+    let event_host = runtime_host.clone();
 
     let join_handle = tokio::spawn(async move {
-        let mut mqtt_options = MqttOptions::new("hero-deploy-tauri-client", host, port);
+        let client_id = format!(
+            "hero-deploy-tauri-client-{}-{}",
+            std::process::id(),
+            std::time::SystemTime::now()
+                .duration_since(std::time::UNIX_EPOCH)
+                .unwrap_or(Duration::from_secs(0))
+                .as_millis()
+        );
+        let mut mqtt_options = MqttOptions::new(client_id, host, port);
         mqtt_options.set_keep_alive(Duration::from_secs(10));
 
-        let (client, mut eventloop): (AsyncClient, EventLoop) = AsyncClient::new(mqtt_options, 16);
+        let (client, mut eventloop): (AsyncClient, EventLoop) = AsyncClient::new(mqtt_options, 100);
 
         emit_mode_sync(
             &app,
             ModeSyncEventPayload {
                 mqtt_connected: false,
+                mqtt_host: Some(event_host.clone()),
+                mqtt_port: Some(runtime_port),
                 deploy_mode_active: None,
                 last_mode_sync_at: None,
             },
@@ -211,6 +239,8 @@ pub fn spawn_mqtt_loop(
                       &app,
                       ModeSyncEventPayload {
                         mqtt_connected: true,
+                        mqtt_host: Some(event_host.clone()),
+                        mqtt_port: Some(runtime_port),
                         deploy_mode_active: None,
                         last_mode_sync_at: None,
                       },
@@ -238,6 +268,8 @@ pub fn spawn_mqtt_loop(
                         &app,
                         ModeSyncEventPayload {
                           mqtt_connected: true,
+                          mqtt_host: Some(event_host.clone()),
+                          mqtt_port: Some(runtime_port),
                           deploy_mode_active: parsed,
                           last_mode_sync_at: Some(chrono_like_now_iso8601()),
                         },
@@ -279,6 +311,8 @@ pub fn spawn_mqtt_loop(
                         &app,
                         ModeSyncEventPayload {
                           mqtt_connected: false,
+                          mqtt_host: Some(event_host.clone()),
+                          mqtt_port: Some(runtime_port),
                           deploy_mode_active: None,
                           last_mode_sync_at: None,
                         },
@@ -295,13 +329,15 @@ pub fn spawn_mqtt_loop(
             &app,
             ModeSyncEventPayload {
                 mqtt_connected: false,
+                mqtt_host: Some(event_host),
+                mqtt_port: Some(runtime_port),
                 deploy_mode_active: None,
                 last_mode_sync_at: None,
             },
         );
     });
 
-    MqttRuntime::new(stop_tx, join_handle)
+    MqttRuntime::new(runtime_host, runtime_port, stop_tx, join_handle)
 }
 
 fn emit_mode_sync(app: &tauri::AppHandle, payload: ModeSyncEventPayload) {

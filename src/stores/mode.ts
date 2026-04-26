@@ -12,6 +12,8 @@ export type DeployModeState = 'unknown' | 'active' | 'inactive'
 
 export const useModeStore = defineStore('mode', () => {
   const mqttConnected = ref(false)
+  const mqttHost = ref<string | null>(null)
+  const mqttPort = ref<number | null>(null)
   const deployModeActive = ref<boolean | null>(null)
   const lastModeSyncAt = ref<string | null>(null)
   const gameStage = ref('unknown')
@@ -55,16 +57,22 @@ export const useModeStore = defineStore('mode', () => {
 
   function applyModeSync(payload: {
     mqttConnected: boolean
+    mqttHost?: string | null
+    mqttPort?: number | null
     deployModeActive: boolean | null
     lastModeSyncAt: string | null
   }) {
     mqttConnected.value = payload.mqttConnected
+    mqttHost.value = payload.mqttHost ?? mqttHost.value
+    mqttPort.value = payload.mqttPort ?? mqttPort.value
     deployModeActive.value = payload.deployModeActive
     lastModeSyncAt.value = payload.lastModeSyncAt
   }
 
   function resetModeSync() {
     mqttConnected.value = false
+    mqttHost.value = null
+    mqttPort.value = null
     deployModeActive.value = null
     lastModeSyncAt.value = null
     lastRefereeMessageAt.value = null
@@ -139,6 +147,8 @@ export const useModeStore = defineStore('mode', () => {
 
   return {
     mqttConnected,
+    mqttHost,
+    mqttPort,
     deployModeActive,
     lastModeSyncAt,
     gameStage,

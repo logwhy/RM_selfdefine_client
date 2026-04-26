@@ -58,7 +58,16 @@ const hudStore = useHudEditorStore()
 const inputStore = useInputControlStore()
 const shellRef = ref<HTMLElement | null>(null)
 const { enterFpsMode, exitFpsMode } = useLowLatencyInput(() => shellRef.value)
-const { host, port, commandMessage, handleConnect, handleDisconnect, handleMockToggle } = useModeSync()
+const {
+  host,
+  port,
+  commandMessage,
+  handleConnect,
+  handleDisconnect,
+  handleMockToggle,
+  useLocalMqttEndpoint,
+  useOfficialMqttEndpoint,
+} = useModeSync()
 const {
   port: videoPort,
   videoCommandMessage,
@@ -251,6 +260,11 @@ function handlePresetShortcut(id: 1 | 2 | 3, savePreset: boolean) {
 }
 
 function handleKeydown(event: KeyboardEvent) {
+  if (event.key === 'F11') {
+    event.preventDefault()
+    void toggleFullscreen()
+    return
+  }
   if (isTypingTarget(event.target)) return
   if (inputStore.fpsMode && !['Escape', 'Enter', 'Tab'].includes(event.key)) return
   if (['Tab', 'F11', 'Escape', 'Enter', 'Delete', 'ArrowUp', 'ArrowDown', 'ArrowLeft', 'ArrowRight'].includes(event.key)) {
@@ -264,10 +278,6 @@ function handleKeydown(event: KeyboardEvent) {
   if (event.key === 'Tab') {
     helpVisible.value = !helpVisible.value
     if (helpVisible.value) handleDrawerVisible(false)
-    return
-  }
-  if (event.key === 'F11') {
-    void toggleFullscreen()
     return
   }
   if (event.key === 'Escape') {
@@ -515,6 +525,10 @@ watch(
           <RmHudPanel title="MQTT Link">
             <n-input v-model:value="host" placeholder="MQTT Host" />
             <n-input-number v-model:value="port" :min="1" :max="65535" style="width: 100%" />
+            <n-space size="small">
+              <n-button size="small" secondary @click="useLocalMqttEndpoint">127.0.0.1</n-button>
+              <n-button size="small" secondary @click="useOfficialMqttEndpoint">192.168.12.1</n-button>
+            </n-space>
             <n-space>
               <n-button type="primary" @click="handleConnect">连接 MQTT</n-button>
               <n-button secondary @click="handleDisconnect">断开 MQTT</n-button>

@@ -22,16 +22,33 @@ pub async fn connect_mqtt(
 ) -> Result<CommandResult, String> {
     let mut runtime_slot = state.mqtt_runtime.lock().await;
 
-    if runtime_slot.is_some() {
-        return Ok(CommandResult {
-            success: true,
-            message: "MQTT already connected".into(),
-        });
+    if let Some(runtime) = runtime_slot.take() {
+        if runtime.endpoint_matches(&host, port) {
+            *runtime_slot = Some(runtime);
+            app.emit(
+                "mode_sync",
+                ModeSyncEventPayload {
+                    mqtt_connected: true,
+                    mqtt_host: Some(host.clone()),
+                    mqtt_port: Some(port),
+                    deploy_mode_active: None,
+                    last_mode_sync_at: None,
+                },
+            )
+            .map_err(|error| format!("emit mode sync failed: {error:?}"))?;
+            return Ok(CommandResult {
+                success: true,
+                message: format!("MQTT already connected to {host}:{port}"),
+            });
+        }
+        drop(runtime_slot);
+        runtime.stop().await;
+        runtime_slot = state.mqtt_runtime.lock().await;
     }
 
     let runtime = spawn_mqtt_loop(
         app,
-        host,
+        host.clone(),
         port,
         state.decoder_input_tx.clone(),
         state.video_config.clone(),
@@ -45,7 +62,7 @@ pub async fn connect_mqtt(
 
     Ok(CommandResult {
         success: true,
-        message: "MQTT connecting started".into(),
+        message: format!("MQTT connecting started: {host}:{port}"),
     })
 }
 
@@ -117,9 +134,12 @@ pub async fn emit_mock_mode_sync(
 ) -> Result<CommandResult, String> {
     let mut mock_active = state.mock_deploy_mode_active.lock().await;
     *mock_active = !*mock_active;
+    let mqtt_connected = state.mqtt_runtime.lock().await.is_some();
 
     let payload = ModeSyncEventPayload {
-        mqtt_connected: true,
+        mqtt_connected,
+        mqtt_host: None,
+        mqtt_port: None,
         deploy_mode_active: Some(*mock_active),
         last_mode_sync_at: Some(format!(
             "{}.{:03}Z",

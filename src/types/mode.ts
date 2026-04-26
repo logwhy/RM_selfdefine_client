@@ -1,5 +1,7 @@
 export interface ModeSyncPayload {
   mqttConnected: boolean
+  mqttHost: string | null
+  mqttPort: number | null
   deployModeActive: boolean | null
   lastModeSyncAt: string | null
 }

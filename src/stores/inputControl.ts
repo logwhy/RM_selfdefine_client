@@ -26,6 +26,7 @@ export interface InputDiagnostics {
 }
 
 const STORAGE_KEY = 'hero-deploy-input-control'
+const INPUT_CONTROL_SCHEMA_VERSION = 2
 
 const keyBits: Record<string, number> = {
   KeyW: 0,
@@ -52,7 +53,7 @@ export const useInputControlStore = defineStore('inputControl', () => {
   const fpsMode = ref(false)
   const pointerLocked = ref(false)
   const dryRun = ref(true)
-  const disabledFire = ref(true)
+  const disabledFire = ref(false)
   const sensitivity = ref(1)
   const feedforwardEnabled = ref(true)
   const feedforwardGain = ref(0.018)
@@ -112,6 +113,7 @@ export const useInputControlStore = defineStore('inputControl', () => {
     writeToStorage(STORAGE_KEY, {
       dryRun: dryRun.value,
       disabledFire: disabledFire.value,
+      schemaVersion: INPUT_CONTROL_SCHEMA_VERSION,
       sensitivity: sensitivity.value,
       feedforwardEnabled: feedforwardEnabled.value,
       feedforwardGain: feedforwardGain.value,
@@ -124,6 +126,7 @@ export const useInputControlStore = defineStore('inputControl', () => {
     const saved = readFromStorage<{
       dryRun?: boolean
       disabledFire?: boolean
+      schemaVersion?: number
       sensitivity?: number
       feedforwardEnabled?: boolean
       feedforwardGain?: number
@@ -132,7 +135,9 @@ export const useInputControlStore = defineStore('inputControl', () => {
     }>(STORAGE_KEY)
     if (!saved) return
     dryRun.value = saved.dryRun ?? true
-    disabledFire.value = saved.disabledFire ?? true
+    disabledFire.value = saved.schemaVersion === INPUT_CONTROL_SCHEMA_VERSION
+      ? saved.disabledFire ?? false
+      : false
     sensitivity.value = saved.sensitivity ?? 1
     feedforwardEnabled.value = saved.feedforwardEnabled ?? true
     feedforwardGain.value = saved.feedforwardGain ?? 0.018
