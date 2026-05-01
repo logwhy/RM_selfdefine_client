@@ -65,11 +65,13 @@ hero-deploy-client/
 - CustomByteBlock topic：`CustomByteBlock`
 - CustomByteBlock 频率上限：50Hz
 - CustomByteBlock data 上限：300 bytes
-- QoS：协议最高 1，项目本地视频测试默认使用 QoS 0
+- CustomByteBlock QoS：协议最高 1，项目本地视频测试默认使用 QoS 0；`KeyboardMouseControl` 按官方客户端示例使用 QoS 2 / ExactlyOnce。
 
 后端会订阅：
 
 - `CustomByteBlock`
+- `KeyboardMouseControl`
+- `CustomControl`
 - `DeployModeStatusSync`
 - 裁判系统相关 topic，例如 `GameStatus`、`RobotDynamicStatus`、`RobotStaticStatus`、`Event` 等
 
@@ -526,7 +528,7 @@ F11 在项目中由前端全局快捷键处理，会调用 Tauri window fullscre
 ## 开发注意事项
 
 - 前端状态会写入 `localStorage`，包括 MQTT endpoint、视频模式、输入控制和 HUD 配置。
-- 后端 MQTT client id 使用进程号和时间戳生成，避免多个客户端互相踢 MQTT 连接。
+- MQTT client id 由通信面板的“选择机器人”选项决定，默认 `1`（红方英雄机器人）。
 - rumqttc 内部队列容量当前为 `100`，用于承受 50Hz CustomByteBlock 和其它 topic 的事件压力。
 - `CustomByteBlock` 收包计数在任何视频模式都会增长；只有切到 `custombyteblock_h264` 时才会进入 H264 重组和解码。
 - 普通 UDP 图传和 CustomByteBlock H264 是两条独立链路，调试时不要混淆 `3334/UDP` 和 `3333/MQTT`。

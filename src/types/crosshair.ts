@@ -3,6 +3,7 @@ export interface CrosshairConfig {
   crosshairOffsetY: number
   crosshairWidth: number
   displayScale: number
+  showCrosshair: boolean
   showCenterDot: boolean
   crosshairColor?: string
 }

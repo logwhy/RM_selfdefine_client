@@ -2,6 +2,7 @@ export interface ModeSyncPayload {
   mqttConnected: boolean
   mqttHost: string | null
   mqttPort: number | null
+  mqttClientId: string | null
   deployModeActive: boolean | null
   lastModeSyncAt: string | null
 }
@@ -9,6 +10,7 @@ export interface ModeSyncPayload {
 export interface MqttConnectParams {
   host: string
   port: number
+  clientId: string
 }
 
 export interface MqttCommandResult {

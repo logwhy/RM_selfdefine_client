@@ -22,6 +22,7 @@ const refereeTopicText = computed(() => {
       <n-descriptions-item label="mqttEndpoint">
         {{ modeStore.mqttHost ? `${modeStore.mqttHost}:${modeStore.mqttPort ?? '-'}` : '-' }}
       </n-descriptions-item>
+      <n-descriptions-item label="mqttClientId">{{ modeStore.mqttClientId ?? '-' }}</n-descriptions-item>
       <n-descriptions-item label="currentDecoderName">{{ videoStore.currentDecoderName }}</n-descriptions-item>
       <n-descriptions-item label="decoderInitSuccess">{{ videoStore.decoderInitSuccess }}</n-descriptions-item>
       <n-descriptions-item label="customBlockPacketsReceived">{{ videoStore.customBlockPacketsReceived }}</n-descriptions-item>

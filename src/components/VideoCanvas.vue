@@ -9,6 +9,7 @@ const props = withDefaults(
     offsetY: number
     lineWidth: number
     displayScale: number
+    showCrosshair: boolean
     showCenterDot: boolean
     crosshairColor?: string
   }>(),
@@ -17,6 +18,7 @@ const props = withDefaults(
     offsetY: 0,
     lineWidth: 2,
     displayScale: 1,
+    showCrosshair: true,
     showCenterDot: true,
     crosshairColor: '#19f7ff',
   },
@@ -71,6 +73,8 @@ function drawPlaceholder() {
 }
 
 function drawOverlay(ctx: CanvasRenderingContext2D, width: number, height: number) {
+  if (!props.showCrosshair) return
+
   const centerX = width / 2 + props.offsetX
   const centerY = height / 2 + props.offsetY
   const length = crosshairLength.value
@@ -192,7 +196,15 @@ onBeforeUnmount(() => {
 })
 
 watch(
-  () => [props.offsetX, props.offsetY, props.lineWidth, props.displayScale, props.showCenterDot],
+  () => [
+    props.offsetX,
+    props.offsetY,
+    props.lineWidth,
+    props.displayScale,
+    props.showCrosshair,
+    props.showCenterDot,
+    props.crosshairColor,
+  ],
   pollLatestFrame,
 )
 

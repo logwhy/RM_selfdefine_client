@@ -7,6 +7,8 @@ import { useVideoStore } from '../stores/video'
 const props = defineProps<{
   lastError: string
   messages: string[]
+  selectedClientId: string
+  selectedRobotLabel: string
 }>()
 
 const modeStore = useModeStore()
@@ -37,16 +39,17 @@ const latestEvent = computed(() => modeStore.refereeEvents[0] ?? null)
     <div class="left-rail-content rm-glass-panel">
       <div class="hero-block">
         <span>当前机器人</span>
-        <strong>英雄</strong>
+        <strong>{{ props.selectedRobotLabel }}</strong>
       </div>
 
       <div class="status-list">
         <p><span>部署模式</span><b>{{ deployText }}</b></p>
         <p><span>MQTT</span><b :class="modeStore.mqttConnected ? 'ok' : 'bad'">{{ modeStore.mqttConnected ? 'ONLINE' : 'OFFLINE' }}</b></p>
         <p><span>MQTT Endpoint</span><b>{{ modeStore.mqttHost ? `${modeStore.mqttHost}:${modeStore.mqttPort ?? '-'}` : '-' }}</b></p>
+        <p><span>MQTT Client ID</span><b>{{ modeStore.mqttClientId ?? props.selectedClientId }}</b></p>
         <p><span>CustomByteBlock</span><b :class="videoStore.customBlockPacketsReceived > 0 ? 'ok' : ''">{{ videoStore.customBlockPacketsReceived }}</b></p>
         <p><span>裁判消息</span><b :class="modeStore.lastRefereeMessageAt ? 'ok' : ''">{{ modeStore.lastRefereeMessageAt ? 'RX' : '-' }}</b></p>
-        <p><span>机器人 ID</span><b>{{ modeStore.robotStaticStatus.robotId ?? '-' }}</b></p>
+        <p><span>裁判机器人 ID</span><b>{{ modeStore.robotStaticStatus.robotId ?? '-' }}</b></p>
         <p><span>准星预设</span><b>{{ activePresetName }}</b></p>
       </div>
 

@@ -2,9 +2,15 @@
 import { computed } from 'vue'
 import { useVideoStore } from '../stores/video'
 
-defineProps<{
-  successMessage: string
-}>()
+withDefaults(
+  defineProps<{
+    successMessage: string
+    showCrosshair?: boolean
+  }>(),
+  {
+    showCrosshair: true,
+  },
+)
 
 const videoStore = useVideoStore()
 const modeLabel = computed(() =>
@@ -14,13 +20,15 @@ const modeLabel = computed(() =>
 
 <template>
   <div class="rm-crosshair-hud">
-    <div class="ring outer" />
-    <div class="ring inner" />
-    <div class="tick top" />
-    <div class="tick right" />
-    <div class="tick bottom" />
-    <div class="tick left" />
-    <div v-if="videoStore.currentMode === 'hero_lob'" class="mode-tag">{{ modeLabel }}</div>
+    <template v-if="showCrosshair">
+      <div class="ring outer" />
+      <div class="ring inner" />
+      <div class="tick top" />
+      <div class="tick right" />
+      <div class="tick bottom" />
+      <div class="tick left" />
+      <div v-if="videoStore.currentMode === 'hero_lob'" class="mode-tag">{{ modeLabel }}</div>
+    </template>
     <div v-if="successMessage" class="center-toast">{{ successMessage }}</div>
     <div v-if="!videoStore.streamAlive" class="connect-hint">
       按 P 打开面板，选择视频源后连接；或点击右侧一键英雄吊射

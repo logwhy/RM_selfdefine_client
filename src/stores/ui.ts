@@ -11,6 +11,7 @@ const defaultCrosshairConfig: CrosshairConfig = {
   crosshairOffsetY: 0,
   crosshairWidth: 2,
   displayScale: 1,
+  showCrosshair: true,
   showCenterDot: true,
   crosshairColor: '#19f7ff',
 }
@@ -24,6 +25,7 @@ const defaultPresets: CrosshairPreset[] = [
     crosshairOffsetY: 14,
     crosshairWidth: 2,
     displayScale: 1.05,
+    showCrosshair: true,
     showCenterDot: true,
     crosshairColor: '#2cff8c',
   },
@@ -34,6 +36,7 @@ const defaultPresets: CrosshairPreset[] = [
     crosshairOffsetY: -18,
     crosshairWidth: 2,
     displayScale: 0.95,
+    showCrosshair: true,
     showCenterDot: true,
     crosshairColor: '#ffc93a',
   },
@@ -47,6 +50,7 @@ function normalizePreset(preset: Partial<CrosshairPreset>, fallback: CrosshairPr
     crosshairOffsetY: preset.crosshairOffsetY ?? fallback.crosshairOffsetY,
     crosshairWidth: preset.crosshairWidth ?? fallback.crosshairWidth,
     displayScale: preset.displayScale ?? fallback.displayScale,
+    showCrosshair: preset.showCrosshair ?? fallback.showCrosshair,
     showCenterDot: preset.showCenterDot ?? fallback.showCenterDot,
     crosshairColor: preset.crosshairColor ?? fallback.crosshairColor,
   }
@@ -65,6 +69,7 @@ export const useUiStore = defineStore('ui', () => {
     state.crosshairOffsetY = config.crosshairOffsetY ?? defaultCrosshairConfig.crosshairOffsetY
     state.crosshairWidth = config.crosshairWidth ?? defaultCrosshairConfig.crosshairWidth
     state.displayScale = config.displayScale ?? defaultCrosshairConfig.displayScale
+    state.showCrosshair = config.showCrosshair ?? defaultCrosshairConfig.showCrosshair
     state.showCenterDot = config.showCenterDot ?? defaultCrosshairConfig.showCenterDot
     state.crosshairColor = config.crosshairColor ?? defaultCrosshairConfig.crosshairColor
   }
@@ -75,6 +80,7 @@ export const useUiStore = defineStore('ui', () => {
       crosshairOffsetY: state.crosshairOffsetY,
       crosshairWidth: state.crosshairWidth,
       displayScale: state.displayScale,
+      showCrosshair: state.showCrosshair,
       showCenterDot: state.showCenterDot,
       crosshairColor: state.crosshairColor,
     }
@@ -142,6 +148,10 @@ export const useUiStore = defineStore('ui', () => {
     state.showDebug = !state.showDebug
   }
 
+  function toggleCrosshair() {
+    state.showCrosshair = !state.showCrosshair
+  }
+
   return {
     ...toRefs(state),
     save,
@@ -150,5 +160,6 @@ export const useUiStore = defineStore('ui', () => {
     applyPreset,
     saveCurrentToPreset,
     toggleDebug,
+    toggleCrosshair,
   }
 })

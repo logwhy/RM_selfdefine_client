@@ -17,6 +17,7 @@ export async function connectMqtt(params: MqttConnectParams): Promise<MqttComman
   return invoke<MqttCommandResult>('connect_mqtt', {
     host: params.host,
     port: params.port,
+    clientId: params.clientId,
   })
 }
 

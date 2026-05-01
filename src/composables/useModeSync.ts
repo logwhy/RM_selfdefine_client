@@ -1,4 +1,9 @@
-import { onBeforeUnmount, onMounted, ref } from 'vue'
+import { onBeforeUnmount, onMounted, ref, watch } from 'vue'
+import {
+  DEFAULT_MQTT_CLIENT_ID,
+  ROBOT_CLIENT_OPTIONS,
+  normalizeRobotClientId,
+} from '../constants/robotClients'
 import { useModeStore } from '../stores/mode'
 import { connectMqtt, disconnectMqtt, emitMockModeSync, subscribeModeSync, subscribeRefereeMessages } from '../services/mqttBridge'
 import { readFromStorage, writeToStorage } from '../utils/storage'
@@ -11,9 +16,11 @@ const STORAGE_KEY = 'hero-deploy-mqtt-endpoint'
 
 export function useModeSync() {
   const modeStore = useModeStore()
-  const savedEndpoint = readFromStorage<{ host?: string; port?: number }>(STORAGE_KEY)
+  const savedEndpoint = readFromStorage<{ host?: string; port?: number; clientId?: string }>(STORAGE_KEY)
   const host = ref(savedEndpoint?.host ?? DEFAULT_HOST)
   const port = ref(savedEndpoint?.port ?? DEFAULT_PORT)
+  const clientId = ref(normalizeRobotClientId(savedEndpoint?.clientId ?? DEFAULT_MQTT_CLIENT_ID))
+  const robotOptions = ROBOT_CLIENT_OPTIONS
   const commandMessage = ref('')
 
   let unlisten: (() => void) | null = null
@@ -39,10 +46,19 @@ export function useModeSync() {
     }
   })
 
+  watch(clientId, () => {
+    writeToStorage(STORAGE_KEY, { host: host.value, port: port.value, clientId: clientId.value })
+    if (modeStore.mqttConnected && modeStore.mqttClientId !== clientId.value) {
+      commandMessage.value = 'Client ID 已变更，重新连接 MQTT 后生效'
+    }
+  })
+
   async function handleConnect() {
     try {
-      writeToStorage(STORAGE_KEY, { host: host.value, port: port.value })
-      const result = await connectMqtt({ host: host.value, port: port.value })
+      const normalizedClientId = normalizeRobotClientId(clientId.value)
+      clientId.value = normalizedClientId
+      writeToStorage(STORAGE_KEY, { host: host.value, port: port.value, clientId: normalizedClientId })
+      const result = await connectMqtt({ host: host.value, port: port.value, clientId: normalizedClientId })
       commandMessage.value = result.message
     } catch (error) {
       commandMessage.value = `连接失败: ${String(error)}`
@@ -53,7 +69,7 @@ export function useModeSync() {
   function setMqttEndpoint(nextHost: string, nextPort = DEFAULT_PORT) {
     host.value = nextHost
     port.value = nextPort
-    writeToStorage(STORAGE_KEY, { host: host.value, port: port.value })
+    writeToStorage(STORAGE_KEY, { host: host.value, port: port.value, clientId: clientId.value })
     commandMessage.value = `MQTT endpoint set: ${host.value}:${port.value}`
   }
 
@@ -89,6 +105,8 @@ export function useModeSync() {
   return {
     host,
     port,
+    clientId,
+    robotOptions,
     commandMessage,
     handleConnect,
     handleDisconnect,

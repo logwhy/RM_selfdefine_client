@@ -22,6 +22,7 @@ const {
   crosshairPresets,
   crosshairWidth,
   displayScale,
+  showCrosshair,
   showCenterDot,
 } = storeToRefs(uiStore)
 
@@ -65,6 +66,9 @@ function handlePresetChange(value: 1 | 2 | 3) {
       </n-form-item>
       <n-form-item label="displayScale">
         <n-input-number v-model:value="displayScale" :min="0.3" :max="3" :step="0.1" />
+      </n-form-item>
+      <n-form-item label="showCrosshair">
+        <n-switch v-model:value="showCrosshair" />
       </n-form-item>
       <n-form-item label="showCenterDot">
         <n-switch v-model:value="showCenterDot" />

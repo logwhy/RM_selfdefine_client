@@ -19,11 +19,17 @@ pub async fn connect_mqtt(
     state: State<'_, AppState>,
     host: String,
     port: u16,
+    client_id: String,
 ) -> Result<CommandResult, String> {
+    let client_id = client_id.trim().to_string();
+    if client_id.is_empty() {
+        return Err("MQTT client ID cannot be empty".into());
+    }
+
     let mut runtime_slot = state.mqtt_runtime.lock().await;
 
     if let Some(runtime) = runtime_slot.take() {
-        if runtime.endpoint_matches(&host, port) {
+        if runtime.connection_matches(&host, port, &client_id) {
             *runtime_slot = Some(runtime);
             app.emit(
                 "mode_sync",
@@ -31,6 +37,7 @@ pub async fn connect_mqtt(
                     mqtt_connected: true,
                     mqtt_host: Some(host.clone()),
                     mqtt_port: Some(port),
+                    mqtt_client_id: Some(client_id.clone()),
                     deploy_mode_active: None,
                     last_mode_sync_at: None,
                 },
@@ -38,7 +45,7 @@ pub async fn connect_mqtt(
             .map_err(|error| format!("emit mode sync failed: {error:?}"))?;
             return Ok(CommandResult {
                 success: true,
-                message: format!("MQTT already connected to {host}:{port}"),
+                message: format!("MQTT already connected to {host}:{port} as client {client_id}"),
             });
         }
         drop(runtime_slot);
@@ -50,6 +57,7 @@ pub async fn connect_mqtt(
         app,
         host.clone(),
         port,
+        client_id.clone(),
         state.decoder_input_tx.clone(),
         state.video_config.clone(),
         state.custom_block_stats.clone(),
@@ -62,7 +70,7 @@ pub async fn connect_mqtt(
 
     Ok(CommandResult {
         success: true,
-        message: format!("MQTT connecting started: {host}:{port}"),
+        message: format!("MQTT connecting started: {host}:{port} as client {client_id}"),
     })
 }
 
@@ -134,12 +142,18 @@ pub async fn emit_mock_mode_sync(
 ) -> Result<CommandResult, String> {
     let mut mock_active = state.mock_deploy_mode_active.lock().await;
     *mock_active = !*mock_active;
-    let mqtt_connected = state.mqtt_runtime.lock().await.is_some();
+    let runtime_guard = state.mqtt_runtime.lock().await;
+    let mqtt_connected = runtime_guard.is_some();
+    let mqtt_client_id = runtime_guard
+        .as_ref()
+        .map(|runtime| runtime.client_id().to_string());
+    drop(runtime_guard);
 
     let payload = ModeSyncEventPayload {
         mqtt_connected,
         mqtt_host: None,
         mqtt_port: None,
+        mqtt_client_id,
         deploy_mode_active: Some(*mock_active),
         last_mode_sync_at: Some(format!(
             "{}.{:03}Z",

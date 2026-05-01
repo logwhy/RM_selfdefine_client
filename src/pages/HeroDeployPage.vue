@@ -49,6 +49,7 @@ const {
   crosshairOffsetY,
   crosshairWidth,
   displayScale,
+  showCrosshair,
   showCenterDot,
 } = storeToRefs(uiStore)
 
@@ -61,6 +62,8 @@ const { enterFpsMode, exitFpsMode } = useLowLatencyInput(() => shellRef.value)
 const {
   host,
   port,
+  clientId,
+  robotOptions,
   commandMessage,
   handleConnect,
   handleDisconnect,
@@ -115,6 +118,9 @@ const activePresetName = computed(() => {
   return uiStore.crosshairPresets.find((preset) => preset.id === uiStore.activePresetId)?.name ?? '默认'
 })
 const visibleCrosshairColor = computed(() => uiStore.crosshairColor ?? '#19f7ff')
+const selectedRobotLabel = computed(() => {
+  return robotOptions.find((option) => option.value === clientId.value)?.label ?? `Client ID ${clientId.value}`
+})
 
 function openDrawer(key: Exclude<DrawerKey, null>) {
   if (activeDrawer.value === key && drawerVisible.value) {
@@ -234,6 +240,11 @@ async function toggleFullscreen() {
   await setCompetitionFullscreen(!isCompetitionFullscreen.value)
 }
 
+function toggleCrosshair() {
+  uiStore.toggleCrosshair()
+  showToast(uiStore.showCrosshair ? '准星已显示' : '准星已隐藏', 'info')
+}
+
 function isTypingTarget(target: EventTarget | null) {
   const element = target as HTMLElement | null
   if (!element) return false
@@ -336,6 +347,8 @@ function handleKeydown(event: KeyboardEvent) {
       handleDrawerVisible(false)
     }
     showToast(hudStore.editMode ? 'HUD 编辑已开启' : 'HUD 编辑已关闭', 'info')
+  } else if (key === 'v') {
+    toggleCrosshair()
   } else if (key === 'i') {
     openDrawer('input')
   } else if (key === 'r') {
@@ -398,6 +411,7 @@ watch(
         :offset-y="crosshairOffsetY"
         :line-width="crosshairWidth"
         :display-scale="displayScale"
+        :show-crosshair="showCrosshair"
         :show-center-dot="showCenterDot"
         :crosshair-color="visibleCrosshairColor"
       />
@@ -405,8 +419,13 @@ watch(
     </div>
 
     <RmTopStatusBar :last-error="lastError" :runtime-text="runtimeText" />
-    <RmLeftInfoRail :last-error="lastError" :messages="systemMessages" />
-    <RmCrosshairHud :success-message="successMessage" />
+    <RmLeftInfoRail
+      :last-error="lastError"
+      :messages="systemMessages"
+      :selected-client-id="clientId"
+      :selected-robot-label="selectedRobotLabel"
+    />
+    <RmCrosshairHud :success-message="successMessage" :show-crosshair="showCrosshair" />
 
     <div v-if="!isCompetitionFullscreen" class="right-hud-stack" :class="{ collapsed: rightPanelCollapsed }">
       <button class="right-hud-toggle" @click="rightPanelCollapsed = !rightPanelCollapsed">
@@ -416,10 +435,12 @@ watch(
         <RmQuickActionPanel
           :switching="switching"
           :success-message="successMessage"
+          :show-crosshair="showCrosshair"
           @hero-lob="quickHeroLob"
           @normal="quickNormal"
           @open="openDrawer"
           @fullscreen="toggleFullscreen"
+          @toggle-crosshair="toggleCrosshair"
         />
         <RmLinkMonitor />
       </div>
@@ -430,10 +451,12 @@ watch(
         compact
         :switching="switching"
         :success-message="successMessage"
+        :show-crosshair="showCrosshair"
         @hero-lob="quickHeroLob"
         @normal="quickNormal"
         @open="openDrawer"
         @fullscreen="toggleFullscreen"
+        @toggle-crosshair="toggleCrosshair"
       />
     </div>
 
@@ -457,6 +480,7 @@ watch(
         <p><kbd class="rm-key">方向键</kbd> 微调</p>
         <p><kbd class="rm-key">Shift</kbd> + 方向键 大步长</p>
         <p><kbd class="rm-key">Ctrl</kbd> + 方向键 小步长</p>
+        <p><kbd class="rm-key">V</kbd> 显示/隐藏</p>
         <p><kbd class="rm-key">R</kbd> 恢复默认</p>
         <p><kbd class="rm-key">S</kbd> 保存配置</p>
       </div>
@@ -525,6 +549,11 @@ watch(
           <RmHudPanel title="MQTT Link">
             <n-input v-model:value="host" placeholder="MQTT Host" />
             <n-input-number v-model:value="port" :min="1" :max="65535" style="width: 100%" />
+            <n-select
+              v-model:value="clientId"
+              :options="robotOptions"
+              placeholder="选择机器人 Client ID"
+            />
             <n-space size="small">
               <n-button size="small" secondary @click="useLocalMqttEndpoint">127.0.0.1</n-button>
               <n-button size="small" secondary @click="useOfficialMqttEndpoint">192.168.12.1</n-button>
@@ -544,6 +573,7 @@ watch(
               <n-tag :type="modeStore.deployModeState === 'active' ? 'success' : 'default'">
                 DEPLOY {{ modeStore.deployModeState.toUpperCase() }}
               </n-tag>
+              <n-tag>CLIENT {{ modeStore.mqttClientId ?? clientId }}</n-tag>
             </n-space>
           </RmHudPanel>
         </n-space>

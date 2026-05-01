@@ -17,6 +17,8 @@ use tokio::time::{sleep, Duration, MissedTickBehavior};
 const DEPLOY_MODE_TOPIC: &str = "DeployModeStatusSync";
 const CUSTOM_BYTE_BLOCK_TOPIC: &str = "CustomByteBlock";
 const KEYBOARD_MOUSE_CONTROL_TOPIC: &str = "KeyboardMouseControl";
+const CUSTOM_CONTROL_TOPIC: &str = "CustomControl";
+const OFFICIAL_CONTROL_TOPICS: &[&str] = &[KEYBOARD_MOUSE_CONTROL_TOPIC, CUSTOM_CONTROL_TOPIC];
 const REFEREE_TOPICS: &[&str] = &[
     "GameStatus",
     "GlobalUnitStatus",
@@ -50,6 +52,7 @@ pub struct ModeSyncEventPayload {
     pub mqtt_connected: bool,
     pub mqtt_host: Option<String>,
     pub mqtt_port: Option<u16>,
+    pub mqtt_client_id: Option<String>,
     pub deploy_mode_active: Option<bool>,
     pub last_mode_sync_at: Option<String>,
 }
@@ -112,6 +115,7 @@ pub struct RefereeMessagePayload {
 pub struct MqttRuntime {
     host: String,
     port: u16,
+    client_id: String,
     stop_tx: Option<oneshot::Sender<()>>,
     join_handle: tokio::task::JoinHandle<()>,
 }
@@ -120,19 +124,25 @@ impl MqttRuntime {
     pub fn new(
         host: String,
         port: u16,
+        client_id: String,
         stop_tx: oneshot::Sender<()>,
         join_handle: tokio::task::JoinHandle<()>,
     ) -> Self {
         Self {
             host,
             port,
+            client_id,
             stop_tx: Some(stop_tx),
             join_handle,
         }
     }
 
-    pub fn endpoint_matches(&self, host: &str, port: u16) -> bool {
-        self.host == host && self.port == port
+    pub fn connection_matches(&self, host: &str, port: u16, client_id: &str) -> bool {
+        self.host == host && self.port == port && self.client_id == client_id
+    }
+
+    pub fn client_id(&self) -> &str {
+        &self.client_id
     }
 
     pub async fn stop(mut self) {
@@ -147,6 +157,7 @@ pub fn spawn_mqtt_loop(
     app: tauri::AppHandle,
     host: String,
     port: u16,
+    client_id: String,
     decoder_input_tx: Arc<Mutex<Option<mpsc::Sender<Vec<u8>>>>>,
     video_config: Arc<Mutex<VideoPipelineConfig>>,
     custom_block_stats: Arc<Mutex<CustomBlockStats>>,
@@ -158,17 +169,11 @@ pub fn spawn_mqtt_loop(
     let (stop_tx, mut stop_rx) = oneshot::channel::<()>();
     let runtime_host = host.clone();
     let runtime_port = port;
+    let runtime_client_id = client_id.clone();
     let event_host = runtime_host.clone();
+    let event_client_id = runtime_client_id.clone();
 
     let join_handle = tokio::spawn(async move {
-        let client_id = format!(
-            "hero-deploy-tauri-client-{}-{}",
-            std::process::id(),
-            std::time::SystemTime::now()
-                .duration_since(std::time::UNIX_EPOCH)
-                .unwrap_or(Duration::from_secs(0))
-                .as_millis()
-        );
         let mut mqtt_options = MqttOptions::new(client_id, host, port);
         mqtt_options.set_keep_alive(Duration::from_secs(10));
 
@@ -180,6 +185,7 @@ pub fn spawn_mqtt_loop(
                 mqtt_connected: false,
                 mqtt_host: Some(event_host.clone()),
                 mqtt_port: Some(runtime_port),
+                mqtt_client_id: Some(event_client_id.clone()),
                 deploy_mode_active: None,
                 last_mode_sync_at: None,
             },
@@ -221,7 +227,7 @@ pub fn spawn_mqtt_loop(
                 update_input_diagnostics(&input_diagnostics, &command).await;
                 if connected && !command.dry_run {
                   let payload = encode_keyboard_mouse_control(&command);
-                  match client.publish(KEYBOARD_MOUSE_CONTROL_TOPIC, QoS::AtMostOnce, false, payload).await {
+                  match client.publish(KEYBOARD_MOUSE_CONTROL_TOPIC, QoS::AtLeastOnce, false, payload).await {
                     Ok(_) => {
                       input_sent_count += 1;
                     }
@@ -241,6 +247,7 @@ pub fn spawn_mqtt_loop(
                         mqtt_connected: true,
                         mqtt_host: Some(event_host.clone()),
                         mqtt_port: Some(runtime_port),
+                        mqtt_client_id: Some(event_client_id.clone()),
                         deploy_mode_active: None,
                         last_mode_sync_at: None,
                       },
@@ -248,6 +255,12 @@ pub fn spawn_mqtt_loop(
 
                     if !subscribed {
                       let mut subscribe_failed = false;
+                      for topic in OFFICIAL_CONTROL_TOPICS {
+                        if let Err(error) = client.subscribe(*topic, QoS::AtLeastOnce).await {
+                          subscribe_failed = true;
+                          log::error!("subscribe {topic} failed: {error:?}");
+                        }
+                      }
                       for topic in REFEREE_TOPICS {
                         if let Err(error) = client.subscribe(*topic, QoS::AtLeastOnce).await {
                           subscribe_failed = true;
@@ -270,6 +283,7 @@ pub fn spawn_mqtt_loop(
                           mqtt_connected: true,
                           mqtt_host: Some(event_host.clone()),
                           mqtt_port: Some(runtime_port),
+                          mqtt_client_id: Some(event_client_id.clone()),
                           deploy_mode_active: parsed,
                           last_mode_sync_at: Some(chrono_like_now_iso8601()),
                         },
@@ -298,7 +312,8 @@ pub fn spawn_mqtt_loop(
                           "CustomByteBlock protobuf parse failed: missing bytes field 1".into(),
                         );
                       }
-                    } else if REFEREE_TOPICS.contains(&message.topic.as_str()) {
+                    } else if REFEREE_TOPICS.contains(&message.topic.as_str())
+                      || OFFICIAL_CONTROL_TOPICS.contains(&message.topic.as_str()) {
                       emit_referee_message(&app, &message.topic, &message.payload);
                     }
                   }
@@ -313,6 +328,7 @@ pub fn spawn_mqtt_loop(
                           mqtt_connected: false,
                           mqtt_host: Some(event_host.clone()),
                           mqtt_port: Some(runtime_port),
+                          mqtt_client_id: Some(event_client_id.clone()),
                           deploy_mode_active: None,
                           last_mode_sync_at: None,
                         },
@@ -331,13 +347,20 @@ pub fn spawn_mqtt_loop(
                 mqtt_connected: false,
                 mqtt_host: Some(event_host),
                 mqtt_port: Some(runtime_port),
+                mqtt_client_id: Some(event_client_id),
                 deploy_mode_active: None,
                 last_mode_sync_at: None,
             },
         );
     });
 
-    MqttRuntime::new(runtime_host, runtime_port, stop_tx, join_handle)
+    MqttRuntime::new(
+        runtime_host,
+        runtime_port,
+        runtime_client_id,
+        stop_tx,
+        join_handle,
+    )
 }
 
 fn emit_mode_sync(app: &tauri::AppHandle, payload: ModeSyncEventPayload) {
@@ -683,22 +706,13 @@ fn decoder_name_or_default(
 }
 
 fn parse_deploy_mode_payload(payload: &[u8]) -> Option<bool> {
-    if let Ok(text) = std::str::from_utf8(payload) {
-        if let Ok(json) = serde_json::from_str::<serde_json::Value>(text) {
-            if let Some(flag) = json.get("deployModeActive").and_then(|v| v.as_bool()) {
-                return Some(flag);
-            }
-        }
-        match text.trim() {
-            "1" | "true" | "on" => return Some(true),
-            "0" | "false" | "off" => return Some(false),
-            _ => {}
-        }
-    }
+    let mut status: Option<u32> = None;
+    visit_protobuf_fields(payload, |field_number, wire_type, value| match (field_number, wire_type, value) {
+        (1, 0, ProtoValue::Varint(value)) => status = Some(value as u32),
+        _ => {}
+    });
 
-    // TODO: replace this with official protobuf parser:
-    // parse_deploy_mode_status_sync_proto(payload)
-    None
+    status.map(|value| value == 1)
 }
 
 fn chrono_like_now_iso8601() -> String {

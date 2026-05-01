@@ -3,6 +3,7 @@ defineProps<{
   compact?: boolean
   switching: 'hero_lob' | 'normal' | null
   successMessage: string
+  showCrosshair: boolean
 }>()
 
 defineEmits<{
@@ -10,6 +11,7 @@ defineEmits<{
   normal: []
   open: [panel: 'params' | 'debug' | 'comm' | 'mode']
   fullscreen: []
+  toggleCrosshair: []
 }>()
 </script>
 
@@ -29,6 +31,7 @@ defineEmits<{
       <button @click="$emit('open', 'comm')">通信</button>
       <button @click="$emit('open', 'mode')">模式</button>
       <button @click="$emit('fullscreen')">全屏</button>
+      <button @click="$emit('toggleCrosshair')">{{ showCrosshair ? '隐藏准星' : '显示准星' }}</button>
     </div>
     <div v-if="successMessage && !compact" class="switch-ok">{{ successMessage }}</div>
   </aside>
